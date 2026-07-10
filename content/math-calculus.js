@@ -1,0 +1,361 @@
+(window.FRAMEWORKS = window.FRAMEWORKS || []).push({
+  id: "math-calculus",
+  name: "Calculus & Optimization",
+  language: "Math Foundations",
+  group: "Math Foundations",
+  navLabel: "Calculus & Optimization",
+  tagline: "How machines learn: derivatives, the **gradient**, and gradient descent — the one engine under *every* model, built from scratch in NumPy.",
+  color: "#8B5CF6",
+  readMinutes: 52,
+  sections: [
+    {
+      id: "why",
+      title: "Why calculus runs machine learning",
+      level: "core",
+      body: [
+        { type: "p", text: "Linear algebra gives you the *objects* of ML — vectors, matrices, the shapes data flows through. Calculus gives you the *verb*: **learning**. Training a model is nothing more than adjusting numbers to make a mistake-measuring function as small as possible, and calculus is the mathematics of *which way to nudge a number to change an output*." },
+        { type: "p", text: "Here is the entire loop that every model on Earth — from linear regression to GPT — runs:" },
+        { type: "list", ordered: true, items: [
+          "Define a **loss** $J(\\theta)$: a single number that says how wrong the model's parameters $\\theta$ currently are.",
+          "Compute the **gradient** $\\nabla_\\theta J$: the direction in parameter space that makes the loss go *up* fastest.",
+          "Step the **opposite** way: $\\theta \\leftarrow \\theta - \\eta\\,\\nabla_\\theta J$ — walk downhill.",
+          "Repeat until the loss stops shrinking.",
+        ]},
+        { type: "p", text: "That is it. Steps 2 and 3 are pure calculus. Everything else in deep learning — attention, convolutions, transformers — is a fancier way to define $J$ and a fancier machine (autodiff) to compute its gradient. If derivatives and gradient descent click, ML stops being magic." },
+        { type: "table",
+          headers: ["ML idea", "Calculus object", "Where it shows up"],
+          rows: [
+            ["'How wrong am I?'", "the loss $J(\\theta)$, a scalar function", "every training run"],
+            ["'Which way is downhill?'", "the gradient $\\nabla_\\theta J$", "backpropagation"],
+            ["'How big a step?'", "the learning rate $\\eta$", "every optimizer"],
+            ["'Chain layers together'", "the **chain rule**", "backprop through a deep net"],
+            ["'Is this a minimum?'", "the Hessian $\\nabla^2 J$ (curvature)", "convergence, saddle points"],
+            ["'Compute all gradients automatically'", "reverse-mode autodiff", "PyTorch `.backward()`"],
+          ]
+        },
+        { type: "heading", text: "A one-paragraph history" },
+        { type: "p", text: "Newton and Leibniz invented calculus independently in the 1660s–1680s (and feuded bitterly over credit) to describe motion and areas. Cauchy proposed **gradient descent** in 1847 to solve astronomical equations. The idea sat mostly dormant for ML until 1986, when Rumelhart, Hinton, and Williams popularized **backpropagation** — really just the chain rule applied systematically to a neural network. The modern leap is **automatic differentiation**: frameworks like PyTorch (2016) and JAX compute exact gradients of arbitrary code, so you write the forward computation and get the backward pass for free. This page builds all of it from the derivative up." },
+        { type: "callout", variant: "note", text: "**How to read this deck.** Every idea is shown three ways: the **intuition** (what it *means*), the **math** (the exact statement plus a short derivation), and the **code** (NumPy from scratch, then the framework one-liner). Do each derivation by hand once — reading a proof is not the same as being able to reproduce it, and the derivations here are the ones you will reuse everywhere else in the curriculum." },
+      ]
+    },
+
+    {
+      id: "derivatives",
+      title: "Derivatives & the chain rule — the most important rule in ML",
+      level: "core",
+      body: [
+        { type: "p", text: "The **derivative** of a function $f$ at a point $x$ is the slope of its tangent line there — the instantaneous rate at which the output changes as you nudge the input. Formally it is a limit:" },
+        { type: "math", tex: String.raw`f'(x) = \frac{df}{dx} = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}` },
+        { type: "p", text: "Read it as a *sensitivity*: if I wiggle $x$ by a tiny amount $h$, the output wiggles by about $f'(x)\\,h$. That local linear approximation is the whole game — gradient descent trusts the slope for one small step, then re-measures. The derivative $>0$ means 'output rises as input rises'; $<0$ means the opposite; $=0$ means you are at a flat spot (a candidate minimum, maximum, or saddle)." },
+        { type: "table",
+          headers: ["Function $f(x)$", "Derivative $f'(x)$", "Note"],
+          rows: [
+            ["$x^n$", "$n x^{n-1}$", "the power rule"],
+            ["$e^x$", "$e^x$", "its own derivative"],
+            ["$\\ln x$", "$1/x$", "shows up in cross-entropy loss"],
+            ["$\\sigma(x) = \\frac{1}{1+e^{-x}}$", "$\\sigma(x)\\,(1-\\sigma(x))$", "the sigmoid — clean gradient"],
+            ["$\\tanh x$", "$1 - \\tanh^2 x$", "a classic activation"],
+            ["$\\max(0, x)$", "$0$ if $x<0$, else $1$", "ReLU (undefined at $0$)"],
+          ]
+        },
+        { type: "heading", text: "The chain rule — this IS backpropagation" },
+        { type: "p", text: "Neural networks are **compositions**: layer after layer, $f(g(h(x)))$. To train them you need the derivative of a composition, and that is the **chain rule** — the single most important theorem in all of machine learning. If $y = f(u)$ and $u = g(x)$, then:" },
+        { type: "math", tex: String.raw`\frac{dy}{dx} = \frac{dy}{du}\cdot\frac{du}{dx} = f'(g(x))\,g'(x)` },
+        { type: "p", text: "The intuition is *rates multiply*. If $y$ changes 3× as fast as $u$, and $u$ changes 2× as fast as $x$, then $y$ changes 6× as fast as $x$. Backpropagation is nothing more than the chain rule applied over and over, from the loss at the output back to every parameter — multiplying local slopes along each path in the network." },
+        { type: "math", tex: String.raw`\underbrace{\frac{\partial J}{\partial w}}_{\text{what we want}} = \frac{\partial J}{\partial a_L}\cdot\frac{\partial a_L}{\partial a_{L-1}}\cdots\frac{\partial a_1}{\partial w}` },
+        { type: "callout", variant: "tip", text: "**Why the chain rule is the whole of backprop:** each layer knows only its *local* derivative — how its output depends on its input. The chain rule lets you multiply these local derivatives along the network to get the *global* derivative of the loss with respect to any weight, without ever writing the giant composite formula. That factorization is why training a 100-layer network is tractable." },
+        { type: "heading", text: "Checking a derivative numerically (you will do this constantly)" },
+        { type: "p", text: "Before trusting any hand-derived or autodiff gradient, verify it against a **finite-difference** approximation of the limit. This one habit catches the majority of backprop bugs. The centered difference is more accurate than the forward one:" },
+        { type: "math", tex: String.raw`f'(x) \approx \frac{f(x+h) - f(x-h)}{2h}, \qquad h \approx 10^{-5}` },
+        { type: "code", lang: "py", code: "import numpy as np\n\ndef numerical_derivative(f, x, h=1e-5):\n    \"\"\"Centered finite difference — the definition of the derivative, minus the limit.\"\"\"\n    return (f(x + h) - f(x - h)) / (2 * h)\n\n# Test on f(x) = x^3, whose exact derivative is 3x^2.\nf = lambda x: x**3\nx = 2.0\nprint(numerical_derivative(f, x))   # ~12.0000  (approx)\nprint(3 * x**2)                      # 12.0      (exact)\n\n# The chain rule in action: d/dx sigmoid(x^2)\nsigmoid = lambda z: 1 / (1 + np.exp(-z))\nf = lambda x: sigmoid(x**2)\n# analytic: sigmoid(x^2)*(1-sigmoid(x^2)) * 2x\nx = 0.7\ns = sigmoid(x**2)\nanalytic = s * (1 - s) * 2 * x\nprint(analytic, numerical_derivative(f, x))   # the two should match" },
+        { type: "callout", variant: "gotcha", text: "Finite differences are a *test*, not a training tool: they cost one function evaluation **per parameter**, so checking a million-parameter net this way is hopelessly slow. That inefficiency is exactly why reverse-mode autodiff (later in this page) exists — it computes *all* partial derivatives in a single backward pass." },
+      ]
+    },
+
+    {
+      id: "gradient",
+      title: "From one variable to many: partial derivatives & the gradient",
+      level: "core",
+      body: [
+        { type: "p", text: "Real models have millions of parameters, so the loss is a function of *many* variables at once: $f(x_1, x_2, \\dots, x_n)$. A **partial derivative** $\\partial f/\\partial x_i$ asks the one-variable question while holding everyone else fixed: 'if I nudge only $x_i$, how does $f$ move?' Mechanically you differentiate as usual and treat the other variables as constants." },
+        { type: "math", tex: String.raw`\frac{\partial f}{\partial x_i} = \lim_{h\to 0}\frac{f(x_1,\dots,x_i+h,\dots,x_n) - f(x_1,\dots,x_i,\dots,x_n)}{h}` },
+        { type: "heading", text: "The gradient — all partials, stacked into a vector" },
+        { type: "p", text: "Collect every partial derivative into one vector and you have the **gradient**, written $\\nabla f$ ('nabla f' or 'grad f'). It is the multivariable generalization of the slope, and it is the object gradient descent actually steps along:" },
+        { type: "math", tex: String.raw`\nabla f(x) = \begin{bmatrix} \dfrac{\partial f}{\partial x_1} \\[6pt] \dfrac{\partial f}{\partial x_2} \\[2pt] \vdots \\[2pt] \dfrac{\partial f}{\partial x_n} \end{bmatrix} \in \mathbb{R}^n` },
+        { type: "p", text: "The gradient lives in the same space as the input: a function of $n$ parameters has an $n$-dimensional gradient, one component per parameter telling you how to adjust it. But the deep fact — the reason we care — is *geometric*: the gradient points in the direction of **steepest ascent**, and its length is how steep that climb is." },
+        { type: "heading", text: "Proof that the gradient is the direction of steepest ascent" },
+        { type: "p", text: "The **directional derivative** measures how fast $f$ changes if you move from $x$ along a *unit* direction $u$ (with $\\|u\\|=1$). It is the dot product of the gradient with that direction:" },
+        { type: "math", tex: String.raw`D_u f(x) = \nabla f(x)^\top u` },
+        { type: "p", text: "We want the unit direction $u$ that maximizes this rate of increase. Apply the dot-product geometry from the Linear Algebra page, $a^\\top b = \\|a\\|\\,\\|b\\|\\cos\\theta$:" },
+        { type: "math", tex: String.raw`D_u f(x) = \nabla f(x)^\top u = \|\nabla f(x)\|\,\|u\|\cos\theta = \|\nabla f(x)\|\cos\theta` },
+        { type: "p", text: "Since $\\|u\\|=1$, the only free quantity is $\\cos\\theta$, the angle between $u$ and the gradient. It is maximized at $\\cos\\theta = 1$, i.e. $\\theta = 0$ — when $u$ points *exactly along* the gradient. (This is the Cauchy–Schwarz inequality in disguise.) Therefore:" },
+        { type: "list", items: [
+          "The gradient direction $u = \\nabla f/\\|\\nabla f\\|$ gives the **steepest ascent**; the rate there equals $\\|\\nabla f\\|$.",
+          "The **opposite** direction $-\\nabla f$ gives the steepest *descent* — which is exactly the way we want to move to shrink a loss.",
+          "Any direction perpendicular to the gradient ($\\cos\\theta = 0$) leaves $f$ momentarily unchanged — you are walking along a contour line.",
+        ]},
+        { type: "callout", variant: "good", text: "**This is the whole justification for gradient descent.** To decrease the loss as fast as possible, step against the gradient. Everything else — learning rates, momentum, Adam — is just being clever about *how far* and *how smoothly* to take that step. The *direction* was settled by the proof above." },
+        { type: "code", lang: "py", code: "import numpy as np\n\ndef numerical_gradient(f, x, h=1e-5):\n    \"\"\"Gradient by finite differences — one partial per coordinate.\"\"\"\n    grad = np.zeros_like(x, dtype=float)\n    for i in range(x.size):\n        step = np.zeros_like(x, dtype=float)\n        step[i] = h\n        grad[i] = (f(x + step) - f(x - step)) / (2 * h)\n    return grad\n\n# f(x, y) = x^2 + 3y^2  ->  analytic grad = [2x, 6y]\nf = lambda v: v[0]**2 + 3 * v[1]**2\nx = np.array([1.0, 2.0])\nprint(numerical_gradient(f, x))   # ~[2., 12.]\nprint(np.array([2*x[0], 6*x[1]])) # [2., 12.]  (exact)" },
+        { type: "callout", variant: "gotcha", text: "The gradient is only the direction of steepest ascent *at the current point*. Move a little and it changes — a loss surface is a curved landscape, not a fixed slope. That is why we take a small step, **recompute** the gradient, and repeat, rather than sprinting in one direction forever." },
+      ]
+    },
+
+    {
+      id: "jacobian-hessian",
+      title: "The Jacobian & the Hessian — first- and second-order",
+      level: "core",
+      body: [
+        { type: "p", text: "The gradient handles a function from many inputs to *one* output (a loss). Two further objects appear constantly: the **Jacobian** (for functions with many *outputs*) and the **Hessian** (second derivatives — curvature)." },
+        { type: "heading", text: "The Jacobian — the derivative of a vector-valued function" },
+        { type: "p", text: "When $f:\\mathbb{R}^n \\to \\mathbb{R}^m$ maps a vector to a vector (think: one layer of a network transforming its input), its derivative is a **matrix** of every output's partial with respect to every input — the **Jacobian** $J$:" },
+        { type: "math", tex: String.raw`J = \frac{\partial f}{\partial x} = \begin{bmatrix} \dfrac{\partial f_1}{\partial x_1} & \cdots & \dfrac{\partial f_1}{\partial x_n} \\[6pt] \vdots & \ddots & \vdots \\[4pt] \dfrac{\partial f_m}{\partial x_1} & \cdots & \dfrac{\partial f_m}{\partial x_n} \end{bmatrix} \in \mathbb{R}^{m\times n}` },
+        { type: "p", text: "The gradient is just the special case $m=1$ (a single-row Jacobian, transposed into a column). The chain rule for vector functions becomes **matrix multiplication of Jacobians** — which is precisely what backprop does layer to layer. Frameworks never build the full Jacobian though; they compute a **Jacobian-vector product** (or its reverse, a vector-Jacobian product), which is far cheaper and is the real engine inside `.backward()`." },
+        { type: "heading", text: "The Hessian — curvature, the second derivative" },
+        { type: "p", text: "The **Hessian** is the matrix of all second-order partials of a scalar function — it is the Jacobian of the gradient. It tells you how the *slope itself* is changing, i.e. the curvature of the loss bowl:" },
+        { type: "math", tex: String.raw`H = \nabla^2 f, \qquad H_{ij} = \frac{\partial^2 f}{\partial x_i \, \partial x_j}` },
+        { type: "p", text: "For any well-behaved (twice continuously differentiable) function, mixed partials are equal — $\\partial^2 f/\\partial x_i\\partial x_j = \\partial^2 f/\\partial x_j\\partial x_i$ — so the **Hessian is symmetric** (this is Clairaut's/Schwarz's theorem). Symmetry means it has real eigenvalues, and those eigenvalues are the whole story of the local shape:" },
+        { type: "table",
+          headers: ["Gradient", "Hessian eigenvalues", "You are at a…"],
+          rows: [
+            ["$\\nabla f = 0$", "all $> 0$ (positive definite)", "local **minimum** (bowl up)"],
+            ["$\\nabla f = 0$", "all $< 0$ (negative definite)", "local **maximum** (bowl down)"],
+            ["$\\nabla f = 0$", "mixed signs (indefinite)", "**saddle point**"],
+            ["$\\nabla f = 0$", "some $= 0$", "degenerate / flat direction"],
+          ]
+        },
+        { type: "p", text: "The **second-order Taylor expansion** ties gradient and Hessian together — it is the quadratic bowl that best approximates the loss near a point $x_0$, and it underlies Newton's method and every convergence proof:" },
+        { type: "math", tex: String.raw`f(x_0 + \delta) \approx f(x_0) + \nabla f(x_0)^\top \delta + \tfrac{1}{2}\,\delta^\top H\, \delta` },
+        { type: "callout", variant: "tip", text: "**Newton's method** uses curvature to pick a smarter step: $\\theta \\leftarrow \\theta - H^{-1}\\nabla f$. It converges in far fewer iterations than gradient descent, but building and inverting an $n\\times n$ Hessian costs $O(n^2)$ storage and $O(n^3)$ compute. With billions of parameters that is impossible, which is why deep learning sticks to **first-order** methods (gradient descent and its cousins) and only *approximates* curvature — that is what Adam quietly does." },
+        { type: "callout", variant: "gotcha", text: "The **condition number** $\\kappa = \\lambda_{\\max}/\\lambda_{\\min}$ of the Hessian predicts how badly plain gradient descent zig-zags: a stretched, ill-conditioned bowl (large $\\kappa$) forces a tiny learning rate and crawling progress. This one number is the reason we standardize features, use batch norm, and reach for adaptive optimizers." },
+      ]
+    },
+
+    {
+      id: "gradient-descent",
+      title: "Gradient descent — deriving the update rule",
+      level: "core",
+      body: [
+        { type: "p", text: "Now we assemble the engine. We have a loss $J(\\theta)$ and we want the $\\theta$ that minimizes it. We cannot see the whole landscape — only the loss and gradient at wherever we currently stand. So: repeatedly look at the local slope and take a small step downhill." },
+        { type: "heading", text: "Derivation from the first-order Taylor approximation" },
+        { type: "p", text: "Near the current point $\\theta$, the loss is well approximated by its linearization — value plus slope times step:" },
+        { type: "math", tex: String.raw`J(\theta + \delta) \approx J(\theta) + \nabla J(\theta)^\top \delta` },
+        { type: "p", text: "We want to choose a step $\\delta$ (of some small fixed length) that makes $J(\\theta+\\delta)$ as *small* as possible — i.e. makes $\\nabla J^\\top \\delta$ as negative as possible. From the steepest-descent proof in the gradient section, the most-negative direction is $\\delta \\propto -\\nabla J(\\theta)$. Scaling by a step size $\\eta > 0$ gives $\\delta = -\\eta\\,\\nabla J(\\theta)$, and the update rule falls out:" },
+        { type: "math", tex: String.raw`\boxed{\;\theta \leftarrow \theta - \eta\,\nabla_\theta J(\theta)\;}` },
+        { type: "p", text: "That boxed line trains essentially every model in this curriculum. The **learning rate** (or step size) $\\eta$ is the single most important hyperparameter in machine learning. Substituting the update back into the Taylor approximation shows the loss provably decreases for small enough $\\eta$:" },
+        { type: "math", tex: String.raw`J(\theta - \eta\nabla J) \approx J(\theta) - \eta\,\|\nabla J(\theta)\|^2 \le J(\theta)` },
+        { type: "p", text: "The change is $-\\eta\\|\\nabla J\\|^2$, which is $\\le 0$ because a squared norm is non-negative. So each step lowers the loss — until the gradient hits zero (a flat spot), where we stop." },
+        { type: "heading", text: "The learning rate: the Goldilocks problem" },
+        { type: "table",
+          headers: ["$\\eta$ setting", "What happens", "Symptom"],
+          rows: [
+            ["too small", "creeps downhill", "training takes forever, may stall"],
+            ["just right", "steady, fast descent", "loss falls smoothly to a minimum"],
+            ["too large", "overshoots the valley", "loss oscillates or **diverges** to NaN"],
+          ]
+        },
+        { type: "callout", variant: "note", text: "**Convergence, briefly.** For a convex, $L$-smooth loss (gradient doesn't change too fast), any fixed $\\eta \\le 1/L$ guarantees convergence to the global minimum. In practice we don't know $L$, so we tune $\\eta$, use a **learning-rate schedule** (start larger, decay over time), or hand the problem to an adaptive optimizer. Convergence *speed* is governed by the Hessian's condition number $\\kappa$ from the previous section." },
+        { type: "heading", text: "Implement gradient descent from scratch" },
+        { type: "p", text: "First on a clean quadratic bowl so you can watch it converge to a known answer, then on a real least-squares regression — connecting straight back to the normal equations from the Linear Algebra page." },
+        { type: "code", lang: "py", code: "import numpy as np\n\ndef gradient_descent(grad_fn, theta0, lr=0.1, steps=50):\n    \"\"\"The entire algorithm in six lines.\"\"\"\n    theta = np.array(theta0, dtype=float)\n    history = [theta.copy()]\n    for _ in range(steps):\n        g = grad_fn(theta)          # which way is uphill?\n        theta = theta - lr * g      # step the opposite way\n        history.append(theta.copy())\n    return theta, np.array(history)\n\n# Minimize f(x, y) = x^2 + 10y^2  (an ill-conditioned bowl, kappa=10)\n# grad = [2x, 20y]; the true minimum is (0, 0).\ngrad = lambda v: np.array([2 * v[0], 20 * v[1]])\n\nfor lr in (0.01, 0.09, 0.11):\n    theta, _ = gradient_descent(grad, [5.0, 5.0], lr=lr, steps=60)\n    print(f\"lr={lr:>4}:  theta={np.round(theta, 4)}\")\n# lr=0.01 -> still crawling; lr=0.09 -> converges nicely;\n# lr=0.11 -> the y-direction (steepest) diverges. Goldilocks in action." },
+        { type: "code", lang: "py", code: "import numpy as np\n\n# Gradient descent for linear regression, from scratch.\n# Loss J(w) = (1/m) ||Xw - y||^2  ->  grad = (2/m) X^T (Xw - y).\nrng = np.random.default_rng(0)\nX = np.column_stack([np.ones(100), rng.normal(size=100)])   # bias + 1 feature\ntrue_w = np.array([1.5, -2.0])\ny = X @ true_w + 0.1 * rng.normal(size=100)\n\ndef mse_grad(w):\n    m = len(y)\n    return (2 / m) * X.T @ (X @ w - y)\n\nw = np.zeros(2)\nfor step in range(2000):\n    w -= 0.1 * mse_grad(w)\n\nprint(\"gradient descent:\", np.round(w, 3))     # ~[1.5, -2.0]\n# Compare with the closed-form normal equation from the Linear Algebra page:\nw_closed = np.linalg.solve(X.T @ X, X.T @ y)\nprint(\"normal equation:  \", np.round(w_closed, 3))   # same answer" },
+        { type: "callout", variant: "good", text: "For linear regression the closed-form normal equation is exact and faster — so why iterate? Because the closed form needs a matrix inverse that costs $O(n^3)$ and only exists for this one convex loss. Gradient descent needs *only the gradient*, scales to billions of parameters, and works on losses that have no closed form at all (every neural network). That generality is why it, not the normal equation, trains modern models." },
+      ]
+    },
+
+    {
+      id: "convexity",
+      title: "Convexity — when a minimum is THE minimum",
+      level: "core",
+      body: [
+        { type: "p", text: "Gradient descent finds a point where the gradient is zero. But is that point the *best* one, or just a local dip? The answer hinges on one property: **convexity**. A function is convex if the line segment between any two points on its graph never dips below the graph itself — informally, it is a bowl with no false bottoms." },
+        { type: "math", tex: String.raw`f\big(\lambda x + (1-\lambda) y\big) \le \lambda f(x) + (1-\lambda) f(y), \qquad \forall\, \lambda \in [0,1]` },
+        { type: "p", text: "For a twice-differentiable function there is a clean equivalent test using the objects from earlier: $f$ is convex **iff its Hessian is positive semidefinite everywhere** ($\\nabla^2 f \\succeq 0$, all eigenvalues $\\ge 0$). In one dimension this is just 'the second derivative is $\\ge 0$' — the curve bends upward everywhere." },
+        { type: "heading", text: "Why convexity is the property you wish every loss had" },
+        { type: "p", text: "The payoff is a theorem worth memorizing: **for a convex function, every local minimum is a global minimum.** Sketch of why — suppose a local min at $a$ were not global, so some $b$ has $f(b) < f(a)$. Convexity forces the whole segment from $a$ toward $b$ to lie below the straight line joining them, so points arbitrarily close to $a$ in the direction of $b$ have strictly smaller value than $f(a)$. That contradicts $a$ being a *local* min. Hence no such $b$ exists." },
+        { type: "callout", variant: "good", text: "**Consequence:** on a convex loss, gradient descent *cannot* get stuck in a bad local minimum — wherever it settles is the global best. Linear regression (bowl-shaped MSE), logistic regression, and SVMs are all convex, which is why they train reliably and reproducibly. This is the mathematical reason classical ML 'just works.'" },
+        { type: "heading", text: "Why deep learning is non-convex (and why we do it anyway)" },
+        { type: "p", text: "Stack linear layers with non-linear activations and the loss surface becomes wildly **non-convex** — a rugged landscape of many local minima, saddle points, and plateaus. Composition of non-linearities destroys convexity, and there is inherent symmetry too: you can permute the neurons of a hidden layer and get an identical function, so equivalent minima are scattered everywhere." },
+        { type: "table",
+          headers: ["Model", "Loss surface", "Guarantee"],
+          rows: [
+            ["Linear / logistic regression", "convex", "gradient descent finds the global optimum"],
+            ["SVM (hinge loss)", "convex", "unique global optimum"],
+            ["Neural network", "non-convex", "no guarantee — but it works in practice"],
+          ]
+        },
+        { type: "callout", variant: "note", text: "**The surprise of deep learning:** despite zero convexity guarantees, gradient descent finds *excellent* solutions on huge networks. The empirical resolution (Dauphin 2014; Choromanska 2015) is that in very high dimensions the dangerous stationary points are overwhelmingly **saddle points**, not bad local minima, and most local minima that exist are nearly as good as the global one. You will meet the tricks for escaping saddles — momentum and Adam — at the end of this page and in the Neural Networks track." },
+      ]
+    },
+
+    {
+      id: "matrix-calculus",
+      title: "Matrix & vector calculus — the identities the whole deck reuses",
+      level: "core",
+      body: [
+        { type: "p", text: "Once your parameters are vectors, you need derivatives *of scalars with respect to vectors*. A handful of identities cover almost everything in ML, and this section derives the ones the Linear Algebra page borrowed to get the normal equations. The convention here is the **denominator layout**: $\\nabla_w f$ has the same shape as $w$." },
+        { type: "heading", text: "Identity 1: the gradient of a linear form" },
+        { type: "p", text: "Let $f(w) = b^\\top w = \\sum_i b_i w_i$ for a constant vector $b$. The partial with respect to one component picks out a single term:" },
+        { type: "math", tex: String.raw`\frac{\partial}{\partial w_k}\Big(\sum_i b_i w_i\Big) = b_k \quad\Longrightarrow\quad \boxed{\;\nabla_w\, b^\top w = b\;}` },
+        { type: "p", text: "This is the vector version of 'the derivative of $bx$ is $b$'. It is why the linear term of any loss contributes a constant vector to the gradient." },
+        { type: "heading", text: "Identity 2: the gradient of a quadratic form" },
+        { type: "p", text: "Let $f(w) = w^\\top A w = \\sum_i \\sum_j A_{ij} w_i w_j$. Differentiate with respect to $w_k$; the variable $w_k$ appears in two families of terms — those where it plays the role of index $i$, and those where it plays index $j$:" },
+        { type: "math", tex: String.raw`\frac{\partial}{\partial w_k}\sum_{i,j} A_{ij} w_i w_j = \underbrace{\sum_j A_{kj} w_j}_{i=k \text{ terms}} + \underbrace{\sum_i A_{ik} w_i}_{j=k \text{ terms}} = (Aw)_k + (A^\top w)_k` },
+        { type: "p", text: "Stacking over all $k$ gives the general rule, which simplifies beautifully when $A$ is symmetric (the common case — covariance, $X^\\top X$, and Hessians are all symmetric):" },
+        { type: "math", tex: String.raw`\boxed{\;\nabla_w\, w^\top A w = (A + A^\top)\,w \;\overset{A=A^\top}{=}\; 2Aw\;}` },
+        { type: "callout", variant: "tip", text: "These two identities are the vector-calculus analogues of the scalar rules $\\frac{d}{dx}(bx)=b$ and $\\frac{d}{dx}(ax^2)=2ax$. If you remember only 'linear form → the vector, quadratic form → twice the matrix times the vector,' you can derive most ML gradients on sight." },
+        { type: "heading", text: "Putting them together: the least-squares gradient" },
+        { type: "p", text: "Now derive the gradient of the linear-regression loss — the exact result the Linear Algebra page invoked but deferred. Start from the squared error and expand it:" },
+        { type: "math", tex: String.raw`J(w) = \|Xw - y\|_2^2 = (Xw - y)^\top(Xw - y) = w^\top \underbrace{X^\top X}_{\text{symmetric}} w - 2\, y^\top X w + y^\top y` },
+        { type: "p", text: "Differentiate term by term. The first term is a quadratic form with the symmetric matrix $A = X^\\top X$, so Identity 2 gives $2X^\\top X w$. The middle term is a linear form $b^\\top w$ with $b = -2X^\\top y$, so Identity 1 gives $-2X^\\top y$. The constant $y^\\top y$ vanishes:" },
+        { type: "math", tex: String.raw`\nabla_w J = 2\,X^\top X\, w - 2\, X^\top y` },
+        { type: "p", text: "Setting the gradient to zero recovers the **normal equations** — the bridge back to the Linear Algebra page is now fully derived, not assumed:" },
+        { type: "math", tex: String.raw`\nabla_w J = 0 \;\Longrightarrow\; X^\top X\, w = X^\top y \;\Longrightarrow\; w = (X^\top X)^{-1} X^\top y` },
+        { type: "table",
+          headers: ["Expression", "Gradient $\\nabla_w$", "Scalar analogue"],
+          rows: [
+            ["$b^\\top w$", "$b$", "$\\frac{d}{dx}(bx) = b$"],
+            ["$w^\\top A w$ (sym. $A$)", "$2Aw$", "$\\frac{d}{dx}(ax^2) = 2ax$"],
+            ["$\\|w\\|_2^2 = w^\\top w$", "$2w$", "$\\frac{d}{dx}(x^2) = 2x$"],
+            ["$\\|Xw - y\\|_2^2$", "$2X^\\top(Xw - y)$", "chain rule on the above"],
+          ]
+        },
+        { type: "code", lang: "py", code: "import numpy as np\n\n# Verify nabla_w (w^T A w) = 2Aw for symmetric A, against finite differences.\nrng = np.random.default_rng(1)\nA = rng.normal(size=(4, 4)); A = A + A.T          # make it symmetric\nw = rng.normal(size=4)\n\nanalytic = 2 * A @ w\n\ndef num_grad(f, w, h=1e-6):\n    g = np.zeros_like(w)\n    for i in range(w.size):\n        e = np.zeros_like(w); e[i] = h\n        g[i] = (f(w + e) - f(w - e)) / (2 * h)\n    return g\n\nnumeric = num_grad(lambda w: w @ A @ w, w)\nprint(np.allclose(analytic, numeric))   # True — the identity checks out" },
+      ]
+    },
+
+    {
+      id: "autodiff",
+      title: "Automatic differentiation — how PyTorch computes gradients",
+      level: "core",
+      body: [
+        { type: "p", text: "You can differentiate by hand for a loss you can write on paper. But a neural network is a composition of thousands of operations — deriving its gradient by hand is hopeless, and finite differences are far too slow. The solution that powers all of deep learning is **automatic differentiation (autodiff)**: the framework records every operation as you compute the output, then replays the chain rule backwards to get exact gradients for *all* parameters in one pass." },
+        { type: "callout", variant: "note", text: "**Autodiff is not the same as** symbolic differentiation (manipulating formulas, which explodes in size) **or** numerical differentiation (finite differences, which is slow and imprecise). It computes the *exact* derivative to machine precision, at a cost of roughly 2–3× the forward computation, for any code you can write — loops, branches, and all." },
+        { type: "heading", text: "The computational graph" },
+        { type: "p", text: "Every computation is a **graph**: inputs and parameters are leaf nodes, each operation is an internal node, and the loss is the root. Consider $L = (wx + b - y)^2$. It decomposes into elementary steps, and each edge carries a *local* derivative that the chain rule multiplies together." },
+        { type: "code", lang: "text", code: "forward:                        local derivatives (backward):\n  z1 = w * x                       dz1/dw = x\n  z2 = z1 + b                      dz2/dz1 = 1,   dz2/db = 1\n  z3 = z2 - y                      dz3/dz2 = 1\n  L  = z3 ** 2                     dL/dz3  = 2*z3\n\nchain them: dL/dw = dL/dz3 * dz3/dz2 * dz2/dz1 * dz1/dw = 2*z3 * 1 * 1 * x" },
+        { type: "heading", text: "Reverse mode — one backward pass, all gradients" },
+        { type: "p", text: "There are two directions to apply the chain rule. **Forward mode** propagates derivatives input-to-output — efficient when there are few inputs. **Reverse mode** propagates output-to-input, seeding the output with gradient $1$ and pushing gradients backward — efficient when there is *one output and many inputs*. A loss is exactly that: one scalar, millions of parameters. So deep learning uses reverse mode, and **backpropagation is just reverse-mode autodiff applied to a neural network.**" },
+        { type: "callout", variant: "tip", text: "The asymmetry is the whole point: reverse mode computes the gradient with respect to *every* input in a **single** backward pass, at fixed cost regardless of the number of parameters. Forward mode or finite differences would need one pass per parameter. This is why a billion-parameter model is trainable at all." },
+        { type: "heading", text: "Build a tiny scalar autograd engine (this is micrograd)" },
+        { type: "p", text: "Here is a complete, working reverse-mode autodiff engine in ~40 lines — a stripped-down version of Andrej Karpathy's `micrograd`. Each `Value` remembers its parents and a local `_backward` rule; calling `.backward()` on the output walks the graph in reverse topological order and accumulates gradients. This is conceptually what `torch.Tensor` does." },
+        { type: "code", lang: "py", code: "import math\n\nclass Value:\n    \"\"\"A scalar that tracks its own gradient via a computational graph.\"\"\"\n    def __init__(self, data, _children=(), _op=\"\"):\n        self.data = data\n        self.grad = 0.0                 # dL/d(self), filled in on backward\n        self._backward = lambda: None   # how to push grad to parents\n        self._prev = set(_children)\n        self._op = _op\n\n    def __add__(self, other):\n        other = other if isinstance(other, Value) else Value(other)\n        out = Value(self.data + other.data, (self, other), \"+\")\n        def _backward():                # d(a+b)/da = 1, d(a+b)/db = 1\n            self.grad += out.grad\n            other.grad += out.grad\n        out._backward = _backward\n        return out\n\n    def __mul__(self, other):\n        other = other if isinstance(other, Value) else Value(other)\n        out = Value(self.data * other.data, (self, other), \"*\")\n        def _backward():                # d(a*b)/da = b, d(a*b)/db = a\n            self.grad += other.data * out.grad\n            other.grad += self.data * out.grad\n        out._backward = _backward\n        return out\n\n    def tanh(self):\n        t = math.tanh(self.data)\n        out = Value(t, (self,), \"tanh\")\n        def _backward():                # d/dx tanh(x) = 1 - tanh^2(x)\n            self.grad += (1 - t ** 2) * out.grad\n        out._backward = _backward\n        return out\n\n    def backward(self):\n        # Build reverse topological order so every node is processed\n        # only after all nodes that depend on it.\n        topo, visited = [], set()\n        def build(v):\n            if v not in visited:\n                visited.add(v)\n                for child in v._prev:\n                    build(child)\n                topo.append(v)\n        build(self)\n        self.grad = 1.0                 # seed: dL/dL = 1\n        for node in reversed(topo):\n            node._backward()            # chain rule, node by node" },
+        { type: "code", lang: "py", code: "# Use it: reproduce our hand-derived gradient for L = (w*x + b - y)^2.\nw, x, b, y = Value(2.0), Value(3.0), Value(-1.0), Value(4.0)\nL = (w * x + b + (Value(-1.0) * y))\nL = L * L                 # square it\nL.backward()\n\nprint(\"L      =\", L.data)      # (2*3 - 1 - 4)^2 = 1.0\nprint(\"dL/dw  =\", w.grad)      # 2*z3*x = 2*1*3 = 6.0\nprint(\"dL/db  =\", b.grad)      # 2*z3   = 2.0\n# Exactly what the chain rule gave by hand — computed automatically." },
+        { type: "callout", variant: "good", text: "**This is the real thing, scaled down.** PyTorch's autograd does the same three moves — record operations into a graph, store a local backward rule per op, replay in reverse topological order — just over N-dimensional tensors on a GPU with hundreds of op types. Once you have written this class, `loss.backward()` is no longer magic." },
+        { type: "code", lang: "py", code: "import torch\n\n# The framework one-liner: identical result, GPU-ready, batched.\nw = torch.tensor(2.0, requires_grad=True)\nx = torch.tensor(3.0)\nb = torch.tensor(-1.0, requires_grad=True)\ny = torch.tensor(4.0)\n\nL = (w * x + b - y) ** 2\nL.backward()              # reverse-mode autodiff, one call\nprint(w.grad, b.grad)     # tensor(6.) tensor(2.) — matches our engine" },
+      ]
+    },
+
+    {
+      id: "landscape",
+      title: "The optimization landscape — saddles, plateaus & why Adam exists",
+      level: "core",
+      body: [
+        { type: "p", text: "Plain gradient descent (the boxed update from earlier) is the foundation, but on a real non-convex loss it struggles against the *terrain*. Understanding the terrain explains why every modern optimizer is a modification of that one update — and forward-references the Neural Networks track, where you will implement these." },
+        { type: "table",
+          headers: ["Terrain feature", "What it does to gradient descent", "$\\nabla J$ there"],
+          rows: [
+            ["Local minimum", "traps you in a suboptimal dip", "$= 0$, Hessian $\\succ 0$"],
+            ["Saddle point", "stalls — flat in some directions, downhill in others", "$= 0$, Hessian indefinite"],
+            ["Plateau", "gradient tiny, progress crawls", "$\\approx 0$ over a wide region"],
+            ["Ravine (ill-conditioned)", "zig-zags across a steep, narrow valley", "large & oscillating"],
+            ["Cliff", "one huge step blows up the weights", "suddenly enormous"],
+          ]
+        },
+        { type: "p", text: "In high dimensions **saddle points**, not local minima, are the dominant obstacle: for a critical point to be a local minimum *every* Hessian eigenvalue must be positive, and with millions of eigenvalues the odds of all-positive are vanishingly small. Most flat spots are saddles, and their surrounding plateaus are where naive training grinds to a halt." },
+        { type: "heading", text: "Momentum — build up speed through flat regions" },
+        { type: "p", text: "**Momentum** accumulates a running average of past gradients, like a heavy ball rolling downhill. It powers through plateaus and small bumps and damps the zig-zag in ravines by averaging out the oscillating component:" },
+        { type: "math", tex: String.raw`v \leftarrow \beta v + (1-\beta)\nabla J(\theta), \qquad \theta \leftarrow \theta - \eta\, v` },
+        { type: "heading", text: "Adam — per-parameter adaptive steps" },
+        { type: "p", text: "**Adam** (Kingma & Ba, 2014 — the default optimizer for most deep learning) combines momentum with a per-parameter learning rate: it divides each parameter's step by a running estimate of that gradient's magnitude, so steep directions get small steps and flat directions get large ones. This is a cheap, diagonal *approximation* of the Hessian rescaling that full Newton's method would do — you get curvature-awareness without ever forming the $O(n^2)$ Hessian." },
+        { type: "math", tex: String.raw`m \leftarrow \beta_1 m + (1-\beta_1)g, \quad v \leftarrow \beta_2 v + (1-\beta_2)g^2, \quad \theta \leftarrow \theta - \eta\,\frac{\hat m}{\sqrt{\hat v} + \epsilon}` },
+        { type: "callout", variant: "note", text: "**The through-line:** every optimizer here is the same $\\theta \\leftarrow \\theta - \\eta\\nabla J$ with a smarter estimate of the step. Momentum improves the *direction* by averaging over time; Adam improves the *per-coordinate scale* by approximating curvature. You will derive and code both in the Neural Networks track — this page just showed you *why* the plain update needs help." },
+        { type: "callout", variant: "gotcha", text: "In practice we rarely compute the gradient over the whole dataset (that is 'batch' gradient descent). We use **stochastic** gradient descent — the gradient of a small random *mini-batch* — which is noisier but far cheaper per step, and the noise itself helps kick the optimizer out of shallow saddles and sharp minima. The math of that trade-off lives in the Classical ML and Neural Networks tracks." },
+      ]
+    },
+
+    {
+      id: "projects",
+      title: "Projects & practice",
+      level: "core",
+      body: [
+        { type: "callout", variant: "note", text: "Do at least two of these by hand before moving on. Reading calculus builds *recognition*; implementing gradient descent and an autograd engine builds the *fluency* that makes the entire Neural Networks track feel obvious. Everything here needs only NumPy (and PyTorch for the final check)." },
+        { type: "list", ordered: true, items: [
+          "**Gradient descent, visualized.** Implement the six-line `gradient_descent` from this page and run it on $f(x,y) = x^2 + 10y^2$. Plot the loss contours and overlay the path of iterates for three learning rates (too small, just right, too large). Watch the too-large run zig-zag and diverge, and *see* the ill-conditioning ($\\kappa = 10$) cause the crawl in the flat direction.",
+          "**Numerical gradient checker.** Write a reusable `numerical_gradient(f, x)` using centered finite differences, then use it to verify the least-squares gradient $2X^\\top(Xw-y)$ and the quadratic-form identity $2Aw$. This is the debugging tool you will reach for every time a hand-derived or custom backprop looks wrong.",
+          "**Linear regression two ways.** Fit a noisy line with (a) the closed-form normal equation and (b) gradient descent on the MSE loss. Confirm they converge to the same weights, then plot the loss curve of the gradient-descent run and mark where it flattens. Add L2 regularization ($+\\lambda\\|w\\|^2$) and re-derive the gradient by hand before coding it.",
+          "**Build micrograd.** Type out the `Value` autograd class from this page, then extend it with `__pow__`, `__neg__`, `exp`, and `relu` (each needs its local `_backward` rule). Verify every new op against your numerical gradient checker. You now own a working reverse-mode autodiff engine.",
+          "**Train a neuron with your own autograd.** Using your `Value` engine, build a single neuron $\\hat y = \\tanh(w^\\top x + b)$, define a squared-error loss, and train it on a handful of points with a manual gradient-descent loop (`.backward()`, then nudge each parameter by `-lr * p.grad`, then zero the grads). This is a complete neural network trained on math you wrote from scratch.",
+          "**Optimizer bake-off.** On a deliberately ill-conditioned quadratic, implement plain gradient descent, momentum, and Adam. Plot loss-vs-iteration for all three and confirm momentum and Adam reach the minimum in far fewer steps — the empirical payoff of the landscape section.",
+        ]},
+      ]
+    },
+
+    {
+      id: "references",
+      title: "Go deeper (references)",
+      level: "deep",
+      body: [
+        { type: "p", text: "This page gives you everything needed to proceed to Classical ML and Neural Networks. To make the calculus *click* at a deeper level — especially the geometry of gradients and the mechanics of backprop — these are the best resources, in recommended order:" },
+        { type: "link", url: "https://www.3blue1brown.com/topics/calculus", text: "3Blue1Brown — Essence of Calculus (the visual intuition for derivatives and the chain rule; watch this first)" },
+        { type: "link", url: "https://www.youtube.com/watch?v=VMj-3S1tku0", text: "Andrej Karpathy — 'The spelled-out intro to neural networks and backpropagation: building micrograd' (2.5 hours, builds the autograd engine from this page line by line)" },
+        { type: "link", url: "https://github.com/karpathy/micrograd", text: "karpathy/micrograd — the ~100-line scalar autograd engine with a PyTorch-like API (read engine.py in full)" },
+        { type: "link", url: "https://cs231n.github.io/optimization-2/", text: "Stanford CS231n — Backpropagation & computing gradients (the clearest notes on staged gradients and the computational graph)" },
+        { type: "link", url: "https://mml-book.github.io/", text: "Mathematics for Machine Learning (Deisenroth, Faisal, Ong) — free PDF; Ch. 5 (vector calculus) and Ch. 7 (optimization) are the exact subset ML needs" },
+        { type: "link", url: "https://web.stanford.edu/~boyd/cvxbook/", text: "Boyd & Vandenberghe — Convex Optimization (free PDF; the definitive reference for the convexity section)" },
+        { type: "link", url: "https://www.deeplearningbook.org/contents/numerical.html", text: "Goodfellow, Bengio & Courville — Deep Learning, Ch. 4 (numerical computation) and Ch. 8 (optimization for training deep models)" },
+      ]
+    },
+  ],
+
+  packages: [
+    { name: "numpy", why: "arrays and vectorized math — you will hand-roll every gradient here in NumPy first" },
+    { name: "torch", why: "`requires_grad` + `.backward()` — production reverse-mode autodiff; the goal this page demystifies" },
+    { name: "torch.optim", why: "SGD, Momentum, Adam — the optimizers whose update rules we derive" },
+    { name: "jax", why: "`grad()` composes autodiff functionally; great for seeing forward vs reverse mode cleanly" },
+    { name: "scipy.optimize", why: "`minimize` with real convergence criteria when you outgrow a hand-written loop" },
+    { name: "sympy", why: "symbolic differentiation to check a hand derivation exactly (`sympy.diff`)" },
+    { name: "matplotlib", why: "plot loss curves and descent paths — seeing convergence is half the intuition" },
+  ],
+
+  gotchas: [
+    "The gradient points **uphill** (steepest ascent). Gradient *descent* steps the opposite way — `theta -= lr * grad`. Flip the sign and your loss climbs to infinity.",
+    "The learning rate $\\eta$ is the make-or-break hyperparameter: too small crawls, too large diverges to `NaN`. When training explodes, lower $\\eta$ first.",
+    "Finite-difference gradients cost one forward pass **per parameter** — fine for a unit test, hopeless for training. That inefficiency is the entire reason reverse-mode autodiff exists.",
+    "In PyTorch, gradients **accumulate** by default — you must call `optimizer.zero_grad()` (or `.grad = None`) each step, or you sum gradients across iterations and training goes haywire.",
+    "A zero gradient means a *stationary* point, not necessarily a minimum — it can be a maximum or (usually, in high dimensions) a **saddle point**. Check curvature (the Hessian) before celebrating.",
+    "Neural-network losses are **non-convex**: no guarantee of a global optimum. This is fine in practice because saddles, not bad local minima, dominate high-dimensional landscapes.",
+    "$\\nabla_w\\, w^\\top A w = (A+A^\\top)w$, which equals $2Aw$ **only when $A$ is symmetric**. Forgetting the symmetry condition silently corrupts your gradient.",
+    "`x * y` is elementwise; the gradient of a matrix expression needs `@` and transposes in the right places — always finite-difference-check a custom backward pass.",
+  ],
+
+  flashcards: [
+    { q: "State the chain rule and say why it matters for ML.", a: "If $y=f(g(x))$ then $\\frac{dy}{dx}=f'(g(x))\\,g'(x)$ — rates multiply. Applied repeatedly from loss to weights, it *is* backpropagation." },
+    { q: "What is the gradient $\\nabla f$, and what direction does it point?", a: "The vector of all partial derivatives. It points in the direction of **steepest ascent**; its length is that maximal rate of increase." },
+    { q: "Prove the gradient is the steepest-ascent direction.", a: "The directional derivative $\\nabla f^\\top u = \\|\\nabla f\\|\\cos\\theta$ for unit $u$ is maximized at $\\theta=0$, i.e. $u$ along $\\nabla f$ (Cauchy–Schwarz)." },
+    { q: "Derive the gradient-descent update rule.", a: "First-order Taylor $J(\\theta+\\delta)\\approx J(\\theta)+\\nabla J^\\top\\delta$; the most-decreasing step is $\\delta=-\\eta\\nabla J$, giving $\\theta\\leftarrow\\theta-\\eta\\nabla J$." },
+    { q: "What does the Hessian tell you at a point where $\\nabla f = 0$?", a: "The curvature. All eigenvalues $>0$ → minimum; all $<0$ → maximum; mixed signs → saddle point." },
+    { q: "Why do convex problems guarantee a global optimum?", a: "For a convex function every local minimum is global, so gradient descent cannot get stuck in a bad dip. Its Hessian is PSD everywhere." },
+    { q: "Give $\\nabla_w\\, b^\\top w$ and $\\nabla_w\\, w^\\top A w$.", a: "$\\nabla_w\\, b^\\top w = b$; $\\nabla_w\\, w^\\top A w = (A+A^\\top)w$, which is $2Aw$ for symmetric $A$." },
+    { q: "Derive the least-squares gradient and its stationary point.", a: "$J=\\|Xw-y\\|^2$ expands to $w^\\top X^\\top X w - 2y^\\top X w + y^\\top y$, so $\\nabla_w J = 2X^\\top(Xw-y)$; zero gives $X^\\top X w = X^\\top y$." },
+    { q: "What is reverse-mode autodiff and why does deep learning use it?", a: "Replaying the chain rule output-to-input. It computes gradients w.r.t. *all* parameters in one backward pass — ideal for one scalar loss and millions of weights." },
+    { q: "Why is deep learning non-convex, yet trainable?", a: "Composing non-linearities and neuron-permutation symmetry destroy convexity. It works because in high dimensions the obstacles are mostly benign saddle points, not bad minima." },
+    { q: "What problem does momentum solve, and what does Adam add?", a: "Momentum averages past gradients to power through plateaus and damp ravine zig-zag; Adam adds a per-parameter adaptive step size (a cheap curvature approximation)." },
+    { q: "How do you sanity-check a hand-derived gradient?", a: "Compare it to a centered finite difference $\\frac{f(x+h)-f(x-h)}{2h}$ with $h\\approx10^{-5}$; they should match to several digits." },
+  ],
+
+  cheatsheet: [
+    { label: "Numerical gradient", code: "(f(x+h) - f(x-h)) / (2*h)" },
+    { label: "GD update", code: "theta -= lr * grad" },
+    { label: "MSE gradient", code: "(2/m) * X.T @ (X @ w - y)" },
+    { label: "Linear form grad", code: "grad_w(b @ w) == b" },
+    { label: "Quadratic form grad", code: "grad_w(w @ A @ w) == 2*A@w  # sym A" },
+    { label: "PyTorch autograd", code: "L.backward(); w.grad" },
+    { label: "Zero grads (PyTorch)", code: "optimizer.zero_grad()" },
+    { label: "JAX gradient", code: "from jax import grad; grad(f)(x)" },
+    { label: "SGD optimizer", code: "torch.optim.SGD(p, lr=0.1, momentum=0.9)" },
+    { label: "Adam optimizer", code: "torch.optim.Adam(p, lr=1e-3)" },
+    { label: "Symbolic check", code: "import sympy; sympy.diff(expr, x)" },
+    { label: "Hessian (torch)", code: "torch.autograd.functional.hessian(f, x)" },
+    { label: "Gradient-check", code: "np.allclose(analytic, numeric)" },
+  ],
+});

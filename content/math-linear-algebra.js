@@ -47,7 +47,7 @@
         { type: "p", text: "This one scalar is doing a lot of work. A linear model's prediction $\\hat y = w^\\top x$ is *literally a dot product* between weights and features. It also has a geometric meaning:" },
         { type: "math", tex: String.raw`x^\top y = \|x\|\,\|y\|\cos\theta` },
         { type: "p", text: "where $\\theta$ is the angle between the vectors. So the dot product measures **alignment**: positive when the vectors point the same way, zero when they are perpendicular (orthogonal), negative when opposed. Cosine similarity — the backbone of search, embeddings, and RAG — is exactly this formula rearranged." },
-        { type: "heading", text: "Norms — how long is a vector?" },
+        { type: "heading", text: "Norms — how long is  a vector?" },
         { type: "p", text: "A **norm** measures length. The Euclidean ($L_2$) norm is the familiar one; the $L_1$ norm sums absolute values and shows up in Lasso regularization:" },
         { type: "math", tex: String.raw`\|x\|_2 = \sqrt{\sum_i x_i^2} = \sqrt{x^\top x}, \qquad \|x\|_1 = \sum_i |x_i|` },
         { type: "callout", variant: "tip", text: "**Why $L_2$ vs $L_1$ matters later:** squaring in $L_2$ punishes large errors far more than small ones (this is why least-squares regression exists), while $L_1$ treats all errors proportionally and drives weights *exactly* to zero (this is why Lasso does feature selection). Same idea, two norms." },
