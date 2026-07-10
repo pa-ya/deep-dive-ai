@@ -1,0 +1,330 @@
+(window.FRAMEWORKS = window.FRAMEWORKS || []).push({
+  id: "nlp-representations",
+  name: "Text Representation & Embeddings",
+  language: "NLP",
+  group: "Natural Language Processing",
+  navLabel: "Representations & Embeddings",
+  tagline: "How text becomes vectors — from one-hot and TF-IDF to word2vec, GloVe, and contextual embeddings, each derived and built from scratch.",
+  color: "#22D3EE",
+  readMinutes: 50,
+  sections: [
+    {
+      id: "why",
+      title: "The core problem: turning words into vectors",
+      level: "core",
+      body: [
+        { type: "p", text: "Every model in this deck — linear regression, a random forest, a neural net, a transformer — eats **vectors of numbers**. But language is made of discrete symbols: `\"cat\"`, `\"dog\"`, `\"the\"`. This section is about the single most consequential design choice in NLP: *how do you turn a word into a vector?* Get it right and words with similar meaning end up close together in space, and everything downstream — search, classification, translation, RAG — becomes geometry. Get it wrong and the model is blind to meaning." },
+        { type: "p", text: "Recall the through-line from the Foundations page: to a naive computer, `\"cat\"` and `\"dog\"` are as unrelated as `\"cat\"` and `\"Tuesday\"`. The entire arc of this page is making the discrete symbols of language *behave* like numbers with meaningful geometry. We climb a ladder of representations, each fixing the previous one's fatal flaw:" },
+        { type: "table",
+          headers: ["Representation", "Idea", "Fatal flaw it has / fixes"],
+          rows: [
+            ["**One-hot**", "one dimension per word, a single 1", "huge, sparse, all words equidistant — no similarity"],
+            ["**Bag-of-words / TF-IDF**", "count words per document", "captures topic, but each word is still an isolated axis"],
+            ["**Count + PPMI + SVD (LSA)**", "factor a co-occurrence matrix", "first *dense* word vectors; the bridge to embeddings"],
+            ["**word2vec / GloVe**", "learn dense vectors that predict context", "similar words cluster; `king−man+woman≈queen`"],
+            ["**Contextual (ELMo, BERT)**", "one vector per word *in its sentence*", "solves polysemy — `\"bank\"` finally has two meanings"],
+          ]
+        },
+        { type: "p", text: "The idea that ties the whole ladder together is one sentence from a 1957 linguist: **\"You shall know a word by the company it keeps.\"** Meaning lives in *context*. Everything from LSA to BERT is an increasingly clever way to cash that sentence into numbers. We will meet it formally in section 3." },
+        { type: "callout", variant: "note", text: "**How this page fits the track.** This is the representation layer that sits *under* everything. The dense vectors we build here are exactly what feeds the RNNs and **transformers** of the next sections (a transformer's first layer is an embedding table). And the sentence embeddings at the end are the retrieval engine of **RAG** in the LLM track. Build the intuition here once; you will reuse it constantly." },
+      ]
+    },
+
+    {
+      id: "one-hot",
+      title: "One-hot encoding and why it fails",
+      level: "core",
+      body: [
+        { type: "p", text: "The most literal way to vectorize a vocabulary of $V$ words: give each word its own dimension. Word number $i$ becomes a vector of all zeros with a single $1$ in position $i$. This is **one-hot encoding**, and it is where every NLP course starts — mostly so you understand what everything after it is running away from." },
+        { type: "math", tex: String.raw`\text{cat} = \begin{bmatrix} 0 \\ 1 \\ 0 \\ \vdots \\ 0 \end{bmatrix},\quad \text{dog} = \begin{bmatrix} 0 \\ 0 \\ 1 \\ \vdots \\ 0 \end{bmatrix} \;\in\; \{0,1\}^{V}` },
+        { type: "code", lang: "py", code: "vocab = [\"the\", \"cat\", \"dog\", \"sat\", \"ran\"]\nstoi = {w: i for i, w in enumerate(vocab)}   # string -> index\n\ndef one_hot(word, vocab):\n    v = [0] * len(vocab)\n    v[stoi[word]] = 1\n    return v\n\nprint(one_hot(\"cat\", vocab))   # [0, 1, 0, 0, 0]\nprint(one_hot(\"dog\", vocab))   # [0, 0, 1, 0, 0]" },
+        { type: "heading", text: "Why it is a dead end" },
+        { type: "p", text: "One-hot vectors have two flaws, and the second is fatal." },
+        { type: "p", text: "**(1) They are enormous and sparse.** A real vocabulary is 50,000–250,000 words, so every word is a 50k-dimensional vector that is 99.998% zeros. This is wasteful, though sparse formats mitigate it." },
+        { type: "p", text: "**(2) Every pair of distinct words is equidistant and orthogonal.** This is the killer. Take the dot product of any two different one-hot vectors and you get exactly zero — they are perpendicular. So the cosine similarity of `\"cat\"` and `\"dog\"` is $0$… and so is the similarity of `\"cat\"` and `\"Tuesday\"`. The representation *encodes no notion of meaning whatsoever.*" },
+        { type: "math", tex: String.raw`\text{one-hot}(w_i)^\top \text{one-hot}(w_j) = \begin{cases} 1 & i = j \\ 0 & i \neq j \end{cases}\qquad(\text{dot product; see Linear Algebra})` },
+        { type: "callout", variant: "gotcha", text: "The distance between `\"good\"` and `\"great\"` equals the distance between `\"good\"` and `\"refrigerator\"`. A model built on one-hot inputs has to learn *from scratch* that `\"good\"` and `\"great\"` are related — it gets no help from the representation. Everything on this page exists to fix exactly this: to make the geometry carry meaning." },
+        { type: "callout", variant: "note", text: "**One-hot is not useless — it is the *output* target, not the input.** Language models still predict a probability distribution over the one-hot vocabulary (that is what the final softmax produces). And the embedding table you will build later is *literally* a one-hot vector multiplied by a matrix: `E[i]` = `one_hot(i) @ E`. So one-hot never disappears; it just stops being how we *represent* meaning on the input side." },
+      ]
+    },
+
+    {
+      id: "bow-tfidf",
+      title: "Bag-of-words, TF-IDF & the vector-space model",
+      level: "core",
+      body: [
+        { type: "p", text: "The first genuinely useful text representation drops word *order* and just counts. A document becomes a **bag of words**: a vector over the vocabulary where entry $i$ is how many times word $i$ appears. `\"the cat sat on the mat\"` and `\"the mat sat on the cat\"` map to the *same* vector — order is thrown away — but for judging what a document is *about*, counts are shockingly effective." },
+        { type: "math", tex: String.raw`\text{doc} \;\longmapsto\; \big[\,\text{count}(w_1),\; \text{count}(w_2),\; \dots,\; \text{count}(w_V)\,\big] \in \mathbb{N}^{V}` },
+        { type: "p", text: "This is the **vector-space model** of documents (Salton, 1975): every document is a point in $V$-dimensional space, and we can measure how similar two documents are by the angle between their vectors. Stack all $m$ documents as rows and you get the **document–term matrix** $X \\in \\mathbb{R}^{m \\times V}$ — the object every classical text classifier and search engine is built on." },
+        { type: "heading", text: "The problem with raw counts: common words dominate" },
+        { type: "p", text: "Raw counts overweight boring words. `\"the\"`, `\"of\"`, `\"is\"` appear constantly and swamp the signal, while a rare, discriminative word like `\"thrombosis\"` barely registers. We want to reward words that are *frequent in this document but rare across the corpus*. That is exactly what **TF-IDF** does." },
+        { type: "heading", text: "TF-IDF, derived" },
+        { type: "p", text: "**TF-IDF** = term frequency × inverse document frequency. **Term frequency** $\\text{tf}(t,d)$ measures how often term $t$ appears in document $d$ (often log-scaled to dampen runaway counts). **Inverse document frequency** $\\text{idf}(t)$ measures how *rare* the term is across the corpus of $N$ documents, where $\\text{df}(t)$ is the number of documents containing $t$:" },
+        { type: "math", tex: String.raw`\text{tf}(t,d) = 1 + \log \big(\text{count}(t,d)\big), \qquad \text{idf}(t) = \log\!\frac{N}{\text{df}(t)}` },
+        { type: "math", tex: String.raw`\text{tfidf}(t,d) = \text{tf}(t,d)\cdot \text{idf}(t)` },
+        { type: "p", text: "Read the idf: a word in *every* document has $\\text{df}=N$, so $\\text{idf}=\\log 1 = 0$ — it is zeroed out. A word in *one* document has a large idf. So TF-IDF automatically down-weights `\"the\"` toward zero and lets `\"thrombosis\"` shine, with no stopword list required. It is the single most important idea in pre-neural information retrieval, and it still ships in production search today." },
+        { type: "callout", variant: "note", text: "The idf is not an arbitrary formula — it has an **information-theoretic** reading. $\\log(N/\\text{df}(t))$ is (up to sign) the self-information / surprisal of encountering term $t$ if you model it as appearing in a random document with probability $\\text{df}(t)/N$. Rare words are surprising; surprise is information; TF-IDF is a surprise-weighted count." },
+        { type: "heading", text: "Cosine similarity — comparing documents by angle" },
+        { type: "p", text: "To ask *\"how similar are these two documents?\"* we compare their TF-IDF vectors. We do **not** use Euclidean distance — a long document and a short one on the same topic would look far apart just because the long one has bigger counts. Instead we use the **cosine similarity** from the Linear Algebra section: the cosine of the angle between the vectors, which ignores magnitude and measures only *direction* (topic)." },
+        { type: "math", tex: String.raw`\cos(\theta) = \frac{a^\top b}{\|a\|\,\|b\|} = \frac{\sum_i a_i b_i}{\sqrt{\sum_i a_i^2}\,\sqrt{\sum_i b_i^2}} \;\in\; [-1, 1]` },
+        { type: "p", text: "For non-negative count vectors this lands in $[0,1]$: $1$ means the same direction (same topic mix), $0$ means no shared words. This one formula is the backbone of search, clustering, deduplication, and — later — embedding-based retrieval. It is the same dot product you met in Linear Algebra, just normalized." },
+        { type: "heading", text: "From scratch: TF-IDF + cosine" },
+        { type: "code", lang: "py", code: "import numpy as np\nfrom collections import Counter\n\ndocs = [\n    \"the cat sat on the mat\",\n    \"the dog sat on the log\",\n    \"cats and dogs are pets\",\n]\ntokenized = [d.split() for d in docs]\nvocab = sorted({w for d in tokenized for w in d})\nstoi = {w: i for i, w in enumerate(vocab)}\nN = len(docs)\n\n# document frequency: in how many docs does each term appear?\ndf = np.zeros(len(vocab))\nfor d in tokenized:\n    for w in set(d):\n        df[stoi[w]] += 1\nidf = np.log(N / df)                       # rare -> large, ubiquitous -> ~0\n\ndef tfidf_vector(tokens):\n    counts = Counter(tokens)\n    v = np.zeros(len(vocab))\n    for w, c in counts.items():\n        v[stoi[w]] = (1 + np.log(c)) * idf[stoi[w]]\n    return v\n\nX = np.array([tfidf_vector(d) for d in tokenized])   # (3, V) doc-term matrix\n\ndef cosine(a, b):\n    return a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12)\n\nprint(round(cosine(X[0], X[1]), 3))   # cat-doc vs dog-doc: share 'sat on the'\nprint(round(cosine(X[0], X[2]), 3))   # cat-doc vs pets-doc: less overlap" },
+        { type: "heading", text: "The one-liner: scikit-learn" },
+        { type: "code", lang: "py", code: "from sklearn.feature_extraction.text import TfidfVectorizer\nfrom sklearn.metrics.pairwise import cosine_similarity\n\ndocs = [\"the cat sat on the mat\",\n        \"the dog sat on the log\",\n        \"cats and dogs are pets\"]\n\nvec = TfidfVectorizer()\nX = vec.fit_transform(docs)          # sparse (3, V) matrix, L2-normalized rows\nprint(X.shape)\nprint(cosine_similarity(X[0], X[1])) # scikit-learn already normalizes -> just a dot product" },
+        { type: "callout", variant: "tip", text: "`TfidfVectorizer` L2-normalizes each row by default, so `X @ X.T` is *already* the cosine-similarity matrix — no separate normalization needed. It also uses a smoothed idf, $\\log\\frac{1+N}{1+\\text{df}} + 1$, to avoid division by zero and to keep weights positive. Real libraries are full of these small numerical guards; know they exist so the numbers don't surprise you." },
+        { type: "heading", text: "Payoff: TF-IDF + logistic regression is a real classifier" },
+        { type: "p", text: "TF-IDF vectors plus a linear model is not a toy — for years it was the *state of the art* for text classification, and it is still the right first baseline in 2026. Before you reach for a transformer, try this: it trains in milliseconds, needs little data, and is fully interpretable (you can read off which words push a review positive)." },
+        { type: "code", lang: "py", code: "from sklearn.feature_extraction.text import TfidfVectorizer\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.pipeline import make_pipeline\n\ntrain = [\"loved this film wonderful acting\", \"terrible boring waste of time\",\n         \"a masterpiece, absolutely brilliant\", \"awful, i want my money back\"]\nlabels = [1, 0, 1, 0]                    # 1 = positive, 0 = negative\n\nclf = make_pipeline(TfidfVectorizer(), LogisticRegression())\nclf.fit(train, labels)\n\nprint(clf.predict([\"brilliant and wonderful\"]))   # [1]\nprint(clf.predict([\"boring waste\"]))              # [0]\n\n# Interpretability: the learned weight per word IS the sentiment score\nvec, lr = clf.named_steps[\"tfidfvectorizer\"], clf.named_steps[\"logisticregression\"]\nvocab = vec.get_feature_names_out()\ntop = lr.coef_[0].argsort()\nprint(\"most positive:\", [vocab[i] for i in top[-3:]])\nprint(\"most negative:\", [vocab[i] for i in top[:3]])" },
+        { type: "callout", variant: "good", text: "**Always build this baseline first.** On many real text tasks a TF-IDF + logistic-regression (or linear SVM) baseline gets you 80–90% of a transformer's accuracy at 0.1% of the cost and full interpretability. If your fancy model can't beat it, the fancy model is broken. This is the single most useful habit in applied NLP." },
+        { type: "callout", variant: "gotcha", text: "Bag-of-words throws away **order and negation**. `\"good, not bad\"` and `\"bad, not good\"` produce the *same* vector. Adding bigrams (`ngram_range=(1,2)`) recovers some local order (`\"not bad\"` becomes its own feature), but the fundamental blindness to composition is exactly what neural models were invented to fix." },
+      ]
+    },
+
+    {
+      id: "distributional",
+      title: "The distributional hypothesis: count-based embeddings, PPMI & LSA",
+      level: "core",
+      body: [
+        { type: "p", text: "TF-IDF represents *documents* well, but each *word* is still an isolated axis — `\"cat\"` and `\"kitten\"` share no dimension. To make *words* similar to each other we need a different idea, and it is the intellectual core of this whole page." },
+        { type: "heading", text: "Firth's distributional hypothesis" },
+        { type: "p", text: "In 1957 the linguist **J.R. Firth** wrote the sentence that launched modern lexical semantics: *\"You shall know a word by the company it keeps.\"* The **distributional hypothesis** says words that appear in similar contexts have similar meanings. You have never seen a `\"wug\"`, but if I tell you *\"I poured the wug into my coffee and added sugar,\"* you already know it is a liquid, drink-like, maybe milk. Its *contexts* gave it meaning. Machines can do the same by tabulating contexts at scale." },
+        { type: "heading", text: "Count-based / co-occurrence vectors" },
+        { type: "p", text: "Operationalize it: slide a window (say ±2 words) across a giant corpus and count how often each word co-occurs with each context word. This gives a **co-occurrence matrix** $C$ where $C_{ij}$ = number of times word $i$ appeared near context word $j$. Row $i$ is now a dense-ish vector describing the *company word $i$ keeps* — and two words with similar rows have similar meaning." },
+        { type: "math", tex: String.raw`C_{ij} = \#\{\text{times word } i \text{ appears within the window of context word } j\}` },
+        { type: "heading", text: "Raw counts are bad; PPMI is the fix" },
+        { type: "p", text: "Just as with documents, raw co-occurrence counts are dominated by frequent words — everything co-occurs with `\"the\"`. We want to know: do words $i$ and $j$ co-occur *more than chance would predict?* That ratio is **Pointwise Mutual Information (PMI)**:" },
+        { type: "math", tex: String.raw`\text{PMI}(i,j) = \log \frac{P(i,j)}{P(i)\,P(j)} = \log \frac{C_{ij}\cdot \textstyle\sum_{k,l} C_{kl}}{\big(\sum_l C_{il}\big)\big(\sum_k C_{kj}\big)}` },
+        { type: "p", text: "PMI is positive when two words co-occur more than independence predicts (`\"ice\"` + `\"cold\"`), zero when exactly independent, and negative when they avoid each other. Negative PMI values are unreliable (they'd need vast data to estimate) so we clip them at zero, giving **Positive PMI (PPMI)** — the standard count-based word representation:" },
+        { type: "math", tex: String.raw`\text{PPMI}(i,j) = \max\big(\text{PMI}(i,j),\; 0\big)` },
+        { type: "heading", text: "LSA: compress the PPMI matrix with SVD" },
+        { type: "p", text: "The PPMI matrix is still $V \\times V$ (huge and sparse). We now do the same thing the Linear Algebra section did to images: take the **truncated SVD** to get the best low-rank approximation, keeping only the top $k$ (say 300) dimensions. Each word's 50,000-long PPMI row collapses into a dense **300-dimensional embedding**. This is **Latent Semantic Analysis** (LSA / LSI, Deerwester et al., 1990) — historically the *first* dense word vectors, a full 23 years before word2vec." },
+        { type: "math", tex: String.raw`\text{PPMI} \approx U_k \Sigma_k V_k^\top, \qquad \text{word embeddings} = U_k \Sigma_k \;\in\; \mathbb{R}^{V \times k}` },
+        { type: "callout", variant: "note", text: "**Why the SVD produces *meaning*.** The truncation forces words that keep similar company to be explained by the same few latent dimensions — those dimensions become soft 'topics' (a liquid-ness axis, a royalty axis…). Synonyms that never literally co-occur (`\"car\"`/`\"automobile\"`) still land near each other because their *contexts* rhyme. This is the exact same low-rank magic from the SVD section, pointed at language." },
+        { type: "code", lang: "py", code: "import numpy as np\n\n# A tiny toy co-occurrence matrix (rows = words, cols = context words).\nwords = [\"ice\", \"steam\", \"cold\", \"hot\", \"water\"]\nC = np.array([\n    [0, 0, 6, 1, 4],   # ice   ~ cold, water\n    [0, 0, 1, 6, 4],   # steam ~ hot, water\n    [6, 1, 0, 0, 2],   # cold\n    [1, 6, 0, 0, 2],   # hot\n    [4, 4, 2, 2, 0],   # water ~ everything\n], dtype=float)\n\ndef ppmi(C):\n    total = C.sum()\n    row = C.sum(axis=1, keepdims=True)      # P(i)\n    col = C.sum(axis=0, keepdims=True)      # P(j)\n    with np.errstate(divide=\"ignore\", invalid=\"ignore\"):\n        pmi = np.log((C * total) / (row * col))\n    pmi[~np.isfinite(pmi)] = 0.0\n    return np.maximum(pmi, 0.0)             # clip negatives -> PPMI\n\nM = ppmi(C)\nU, s, Vt = np.linalg.svd(M)\nemb = U[:, :2] * s[:2]                      # keep top-2 dims -> dense embeddings\nfor w, v in zip(words, emb):\n    print(f\"{w:6s} {v.round(2)}\")\n# 'ice' and 'steam' end up related (both are water states) despite rarely co-occurring." },
+        { type: "callout", variant: "tip", text: "LSA is not a museum piece. Truncated SVD of a TF-IDF or PPMI matrix (`sklearn.decomposition.TruncatedSVD`) is still a fast, strong, *fully deterministic* way to get topic vectors and do semantic search when you can't afford a neural model. When neural embeddings are overkill, reach for this." },
+        { type: "callout", variant: "note", text: "**Count-based (LSA) vs predict-based (word2vec).** For a decade these were seen as rival camps. Then Levy & Goldberg (2014) proved the surprise of the field: word2vec with negative sampling is *implicitly factorizing a shifted PPMI matrix.* The two families are two routes up the same mountain. We climb the predict-based route next." },
+      ]
+    },
+
+    {
+      id: "word2vec",
+      title: "word2vec: learning embeddings by prediction",
+      level: "core",
+      body: [
+        { type: "p", text: "In 2013 **Tomáš Mikolov** and colleagues at Google released **word2vec**, and dense word embeddings went from a research curiosity to the thing everyone used. Instead of *counting* contexts and factorizing, word2vec *learns* embeddings by training a tiny neural network on a fake task: **predict a word's context from the word** (or vice-versa). The trick — and it is one of the most beautiful in ML — is that we don't care about the prediction task at all. We throw the classifier away and keep the **weights**, because the weights *are* the embeddings." },
+        { type: "heading", text: "Two architectures: skip-gram and CBOW" },
+        { type: "p", text: "word2vec comes in two flavors, mirror images of each other:" },
+        { type: "table",
+          headers: ["Model", "Task", "Best for"],
+          rows: [
+            ["**Skip-gram**", "given the *center* word, predict each *context* word", "rare words; smaller data — the usual default"],
+            ["**CBOW**", "given the *context* words (averaged), predict the *center* word", "frequent words; faster to train"],
+          ]
+        },
+        { type: "p", text: "We focus on **skip-gram**, the more common choice. Slide a window over the corpus. For each center word $c$ and each context word $o$ in its window, we want the model to assign high probability to the pair $(c, o)$ that actually occurred." },
+        { type: "heading", text: "The model: two embedding tables, one dot product" },
+        { type: "p", text: "Every word gets *two* vectors: a **center** vector $v_w$ (when it is the input) and a **context** vector $u_w$ (when it is being predicted). The score that word $o$ is in the context of word $c$ is just their dot product, turned into a probability over the whole vocabulary by a softmax:" },
+        { type: "math", tex: String.raw`P(o \mid c) = \frac{\exp\!\big(u_o^\top v_c\big)}{\sum_{w=1}^{V} \exp\!\big(u_w^\top v_c\big)}` },
+        { type: "p", text: "Training maximizes the log-probability of the real context words. Because the score is a dot product, words that must predict similar contexts are pushed to have similar vectors — the distributional hypothesis, realized by gradient descent." },
+        { type: "heading", text: "The problem: that softmax is intractable" },
+        { type: "p", text: "Look at the denominator: $\\sum_{w=1}^{V} \\exp(u_w^\\top v_c)$. It sums over the **entire vocabulary** — 50,000 to millions of words — and you need it for *every* training pair, of which there are billions. Computing the true softmax is hopeless. The genius of word2vec is a trick to avoid it entirely." },
+        { type: "heading", text: "Negative sampling, derived" },
+        { type: "p", text: "The idea: stop trying to predict *the* right word out of $V$. Instead, **turn it into a bunch of yes/no questions.** For a real (center, context) pair, ask *\"did this pair really co-occur?\"* — answer yes. Then draw $k$ **negative** words at random and ask the same question — answer no. We just need to make real pairs score high and random pairs score low. This converts one $V$-way softmax into $k+1$ cheap logistic regressions." },
+        { type: "p", text: "Formally, let $\\sigma(x) = 1/(1+e^{-x})$ be the sigmoid. For a true pair $(c,o)$ and $k$ negative samples $w_i \\sim P_n(w)$, the per-pair objective to **maximize** is:" },
+        { type: "math", tex: String.raw`\mathcal{L} = \log \sigma\!\big(u_o^\top v_c\big) \; + \; \sum_{i=1}^{k} \mathbb{E}_{w_i \sim P_n}\Big[\log \sigma\!\big(-u_{w_i}^\top v_c\big)\Big]` },
+        { type: "p", text: "Read it: the first term pushes the real pair's dot product **up** (toward $\\sigma \\to 1$); each negative term pushes a random pair's dot product **down** (note the minus sign: $\\sigma(-x)\\to 1$ means $x$ is very negative). The gradients are trivial — the derivative of $\\log\\sigma$ is just $(\\text{label} - \\sigma(\\text{score}))$, the same clean form as logistic regression." },
+        { type: "callout", variant: "note", text: "**The noise distribution is not uniform.** word2vec samples negatives from the unigram frequency raised to the $3/4$ power, $P_n(w) \\propto \\text{count}(w)^{0.75}$. That exponent flattens the distribution: it samples frequent words less often than their raw frequency, and rare words more often, than a plain unigram would. It is an empirical hack that measurably improves the vectors — a reminder that a lot of deep learning is well-tuned engineering." },
+        { type: "heading", text: "The famous result: analogies as vector arithmetic" },
+        { type: "p", text: "The stunning discovery that made word2vec famous: the learned space has **linear structure that encodes relationships.** The vector offset from `\"man\"` to `\"woman\"` is roughly the same as from `\"king\"` to `\"queen\"` — the space learned a 'gender' direction on its own. So you can do *analogy by arithmetic*:" },
+        { type: "math", tex: String.raw`\vec{v}_{\text{king}} - \vec{v}_{\text{man}} + \vec{v}_{\text{woman}} \;\approx\; \vec{v}_{\text{queen}}` },
+        { type: "p", text: "Nobody told it about gender or royalty. It emerged purely from the statistics of which words keep which company. Similar directions encode `\"Paris→France\"` ≈ `\"Tokyo→Japan\"` (capital-of), verb tense, plurals, and more. This is the moment embeddings stopped being a compression trick and started looking like *meaning*." },
+        { type: "callout", variant: "note", text: "**We build the full skip-gram + negative-sampling trainer from scratch in NumPy in section 8** — including the gradients derived above. Read this section for the *why*, then implement it there for the *how*. The from-scratch version is short: ~40 lines, and it produces real analogies on a toy corpus." },
+      ]
+    },
+
+    {
+      id: "glove",
+      title: "GloVe: embeddings from global co-occurrence",
+      level: "core",
+      body: [
+        { type: "p", text: "A year after word2vec, Pennington, Socher & Manning at Stanford released **GloVe** (Global Vectors, 2014). Their critique of word2vec was pointed: skip-gram learns from *local* windows one at a time and never directly uses the **global** co-occurrence statistics that LSA exploits so well. GloVe's goal was to get the best of both worlds — the linear-analogy structure of word2vec *and* the efficient use of global counts of a count-based method." },
+        { type: "heading", text: "The key insight: ratios of co-occurrence probabilities" },
+        { type: "p", text: "GloVe starts from an observation about the co-occurrence matrix $X$. What carries meaning is not raw probabilities but their **ratios**. Consider `\"ice\"` and `\"steam\"` and some probe word $k$:" },
+        { type: "table",
+          headers: ["probe $k$", "$P(k\\mid\\text{ice})$", "$P(k\\mid\\text{steam})$", "ratio"],
+          rows: [
+            ["`solid`", "large", "small", "$\\gg 1$"],
+            ["`gas`", "small", "large", "$\\ll 1$"],
+            ["`water`", "large", "large", "$\\approx 1$"],
+            ["`fashion`", "small", "small", "$\\approx 1$"],
+          ]
+        },
+        { type: "p", text: "The *ratio* $P(k\\mid\\text{ice})/P(k\\mid\\text{steam})$ cleanly separates relevant words (`solid`, `gas`) from irrelevant ones (`water`, `fashion`). GloVe designs its embeddings so that vector differences capture exactly these ratios — which is *why* it inherits word2vec's analogy structure by construction." },
+        { type: "heading", text: "The objective: a weighted least-squares on log-counts" },
+        { type: "p", text: "Working through the algebra (they show a word vector's dot product should equal the log co-occurrence count), GloVe becomes a **weighted least-squares** problem — essentially a matrix factorization of $\\log X$:" },
+        { type: "math", tex: String.raw`J = \sum_{i,j=1}^{V} f(X_{ij})\,\Big(w_i^\top \tilde{w}_j + b_i + \tilde{b}_j - \log X_{ij}\Big)^2` },
+        { type: "p", text: "Here $w_i$ and $\\tilde w_j$ are the word and context vectors, $b_i,\\tilde b_j$ are biases, and $f(X_{ij})$ is a **weighting function** that caps the influence of very frequent pairs (so `\"the\"` doesn't dominate) and zeroes out pairs that never co-occur (so we skip the empty cells and avoid $\\log 0$). Minimizing $J$ by gradient descent gives the embeddings. Notice: it factorizes the *global* co-occurrence matrix, but with word2vec-style dot-product structure." },
+        { type: "heading", text: "word2vec vs GloVe" },
+        { type: "table",
+          headers: ["", "word2vec (skip-gram + neg. sampling)", "GloVe"],
+          rows: [
+            ["Learns from", "local windows, streamed one at a time", "the precomputed global co-occurrence matrix"],
+            ["Nature", "predictive (implicit PPMI factorization)", "explicit weighted matrix factorization of $\\log X$"],
+            ["Training", "online SGD over pairs; low memory", "build $X$ once (can be large), then factorize"],
+            ["Analogies", "excellent", "excellent (comparable in practice)"],
+            ["Handles rare words", "slightly better (subsampling + $0.75$ negatives)", "the $f(X_{ij})$ weighting handles frequency"],
+          ]
+        },
+        { type: "callout", variant: "tip", text: "**Which should you use?** In practice their quality is close enough that the honest answer in 2026 is: *neither, for new work* — reach for contextual embeddings (next section) or a `sentence-transformers` model. But for classic static word vectors, GloVe ships convenient pretrained files (`glove.6B`, `glove.840B`) and word2vec has the mature `gensim` toolkit. Both are excellent; the era they defined is what matters." },
+        { type: "callout", variant: "note", text: "**FastText** (Facebook, 2016) is the important third static embedding. It represents each word as a **bag of character n-grams** (`\"where\"` → `wh, whe, her, ere, re`), so it can build a vector for a word it never saw at training time — a genuinely useful superpower for morphologically rich languages, typos, and rare words. It is the bridge from word-level to the *subword* tokenization used by every modern LLM (see Foundations → BPE)." },
+      ]
+    },
+
+    {
+      id: "properties",
+      title: "Properties & pitfalls: analogies, bias, and polysemy",
+      level: "core",
+      body: [
+        { type: "p", text: "Static embeddings (word2vec, GloVe, FastText) share three properties you must internalize — one wonderful, two cautionary." },
+        { type: "heading", text: "1. The geometry is meaningful (the wonderful part)" },
+        { type: "p", text: "Nearest neighbors by cosine similarity are semantically related (`\"dog\"` → `\"puppy\"`, `\"cat\"`, `\"pet\"`). Directions encode relations (gender, tense, capital-of). Clustering the vectors recovers topics. This is the payoff: downstream models start from a representation where similar words are already close, so they need far less data to learn." },
+        { type: "callout", variant: "gotcha", text: "**Don't oversell the analogy magic.** `king − man + woman ≈ queen` works, but the standard evaluation *excludes the three input words* from the answer candidates. Without that exclusion, the nearest vector is often just `\"king\"` again. Analogies are real but noisier and more curated than the famous demo suggests — a good lesson in reading ML claims critically." },
+        { type: "heading", text: "2. Embeddings absorb and amplify human bias" },
+        { type: "p", text: "Embeddings learn from human text, so they learn human prejudice. Bolukbasi et al. (2016) showed that `man : computer_programmer :: woman : homemaker` falls straight out of word2vec trained on Google News, and that occupations project onto the gender direction in ways that mirror stereotypes. Because these vectors feed résumé screeners, search rankers, and translators, the bias is not academic — it is deployed and it scales." },
+        { type: "callout", variant: "warn", text: "A model is a mirror of its training data. If you deploy embeddings in anything touching people — hiring, lending, moderation, search — you must *measure* bias (e.g. the WEAT test) and consider debiasing or mitigation. \"The math is neutral\" is not a defense; the data is not neutral, and the model faithfully reproduces it. This concern only grows with LLMs." },
+        { type: "heading", text: "3. One vector per word cannot handle polysemy (the fatal limit)" },
+        { type: "p", text: "This is the flaw that ended the static-embedding era. A word like `\"bank\"` has one vector — but it means a riverbank in *\"fish by the bank\"* and a financial institution in *\"deposit at the bank.\"* A single static vector is forced to average all senses into one muddy point, sitting awkwardly between `\"river\"` and `\"money\"`, ideal for neither." },
+        { type: "math", tex: String.raw`\vec{v}_{\text{bank}} \;\approx\; \tfrac12\big(\vec{v}_{\text{river-sense}} + \vec{v}_{\text{money-sense}}\big) \;\;\Rightarrow\;\; \text{wrong for both contexts}` },
+        { type: "p", text: "The fix is obvious in hindsight: a word's vector should depend on the **sentence it is in.** `\"bank\"` should get one vector in a river sentence and a different vector in a finance sentence. That is a **contextual embedding**, and producing it well is precisely what ELMo, BERT, and every transformer since do. It is the doorway from this page into the rest of the NLP and LLM tracks." },
+      ]
+    },
+
+    {
+      id: "contextual",
+      title: "Contextual & sentence embeddings (the modern era)",
+      level: "core",
+      body: [
+        { type: "p", text: "Everything so far produced **one static vector per word type**, looked up from a table. The modern approach produces **one vector per word *token*, in its specific sentence** — computed on the fly by a neural network that has read the whole sentence. This single change dissolves the polysemy problem and is the representation every LLM uses internally." },
+        { type: "heading", text: "ELMo → BERT: contextualized word vectors" },
+        { type: "p", text: "**ELMo** (Peters et al., 2018) was the breakthrough: run a deep **bidirectional LSTM** over the sentence and use its internal states as each word's embedding. Now `\"bank\"` in *\"river bank\"* and `\"bank\"` in *\"savings bank\"* get genuinely different vectors, because the network conditioned on the surrounding words. Months later **BERT** (Devlin et al., 2018) replaced the LSTM with a **transformer** and trained it with *masked language modeling* — predict randomly hidden words from both directions — producing dramatically better contextual embeddings and sweeping every NLP benchmark." },
+        { type: "math", tex: String.raw`\underbrace{\vec{v}_{\text{bank}}}_{\text{static: one vector}} \;\;\longrightarrow\;\; \underbrace{\vec{v}_{\text{bank} \,\mid\, \text{sentence}}}_{\text{contextual: depends on the sentence}}` },
+        { type: "callout", variant: "note", text: "**Forward reference — this is the whole point of transformers.** *How* a network reads a full sentence and produces one context-aware vector per token is exactly the **self-attention** mechanism, built from scratch in the **Transformers** section. Contextual embeddings are the *output* of the machinery you are about to learn. If you understand \"one vector per word-in-context\", you already understand what a transformer is *for*." },
+        { type: "heading", text: "Sentence embeddings: one vector for a whole sentence" },
+        { type: "p", text: "For search, clustering, and retrieval you often want a single vector for an *entire* sentence or paragraph, not per word. The naive move — average a sentence's word2vec vectors — works surprisingly okay but loses word order and blurs meaning. **SBERT** (Sentence-BERT, Reimers & Gurevych, 2019) fixed this: fine-tune BERT with a *siamese* setup so that the sentence vectors of paraphrases land close and unrelated sentences land far, under cosine similarity." },
+        { type: "p", text: "Why not just run BERT on a sentence pair directly? Because comparing $N$ sentences pairwise would need $O(N^2)$ BERT passes — infeasible for a corpus. SBERT encodes each sentence **once** into a fixed vector, so comparing them is a cheap cosine similarity. That is what makes semantic search over millions of documents tractable." },
+        { type: "callout", variant: "tip", text: "**This is the engine of RAG.** Retrieval-Augmented Generation embeds your documents into sentence vectors once, stores them in a vector database, and at query time embeds the question and finds the nearest chunks by cosine similarity — feeding them to an LLM. The `king−man+woman` geometry from this page, scaled to sentences, *is* how modern AI search works. You will build the full pipeline in the **LLM → RAG** section." },
+        { type: "heading", text: "The representation ladder, complete" },
+        { type: "table",
+          headers: ["Representation", "Granularity", "Context-aware?", "Where it lives now"],
+          rows: [
+            ["One-hot", "word type", "no", "output softmax targets"],
+            ["TF-IDF", "document", "no", "search baselines, features"],
+            ["word2vec / GloVe", "word type", "no", "lightweight, pretrained static vectors"],
+            ["ELMo / BERT", "word token", "**yes**", "inside every transformer"],
+            ["SBERT / e5 / OpenAI embeddings", "sentence / passage", "**yes**", "semantic search, RAG, clustering"],
+          ]
+        },
+      ]
+    },
+
+    {
+      id: "from-scratch",
+      title: "Building it: skip-gram from scratch, then the libraries",
+      level: "core",
+      body: [
+        { type: "p", text: "Time to make it real. First we implement **skip-gram with negative sampling in pure NumPy** — every gradient from section 4, no framework — and watch it learn analogies on a toy corpus. Then we use the production tools (`gensim`, `sentence-transformers`) the way you actually would." },
+        { type: "heading", text: "Skip-gram + negative sampling in NumPy" },
+        { type: "code", lang: "py", code: "import numpy as np\nfrom collections import Counter\nrng = np.random.default_rng(0)\n\ncorpus = (\"king is a strong man . queen is a strong woman . \"\n          \"man is to woman as king is to queen . \"\n          \"paris is in france . tokyo is in japan .\").split()\n\nvocab = sorted(set(corpus))\nstoi = {w: i for i, w in enumerate(vocab)}\nV, D = len(vocab), 16\nids = [stoi[w] for w in corpus]\n\n# unigram^0.75 negative-sampling distribution (Mikolov's trick)\nfreq = np.array([Counter(corpus)[w] for w in vocab], dtype=float) ** 0.75\nneg_p = freq / freq.sum()\n\n# generate (center, context) training pairs within a window\nWIN, K = 2, 5\npairs = [(ids[i], ids[j])\n         for i in range(len(ids))\n         for j in range(max(0, i-WIN), min(len(ids), i+WIN+1)) if i != j]\n\nsigmoid = lambda x: 1.0 / (1.0 + np.exp(-x))\nvC = rng.normal(0, 0.1, (V, D))    # center vectors v_c\nuO = rng.normal(0, 0.1, (V, D))    # context vectors u_o\nlr = 0.05\n\nfor epoch in range(300):\n    rng.shuffle(pairs)\n    for c, o in pairs:\n        negs = rng.choice(V, size=K, p=neg_p)          # k negative samples\n        targets = np.concatenate(([o], negs))\n        labels = np.array([1.0] + [0.0] * K)           # 1 real, K fake\n        scores = uO[targets] @ vC[c]                   # dot products\n        grad = (sigmoid(scores) - labels)              # logistic gradient\n        # update: same clean form as logistic regression\n        uO[targets] -= lr * np.outer(grad, vC[c])\n        vC[c]       -= lr * grad @ uO[targets]\n\nemb = vC                                               # keep center vectors\n\ndef nearest(word, k=3):\n    v = emb[stoi[word]]\n    sims = emb @ v / (np.linalg.norm(emb, axis=1) * np.linalg.norm(v) + 1e-9)\n    order = sims.argsort()[::-1]\n    return [(vocab[i], round(float(sims[i]), 2)) for i in order if i != stoi[word]][:k]\n\nprint(\"near 'king':\", nearest(\"king\"))\nprint(\"near 'france':\", nearest(\"france\"))" },
+        { type: "callout", variant: "note", text: "On a corpus this tiny the vectors are noisy — the point is the *mechanism*: the gradient `sigmoid(scores) - labels` is exactly the negative-sampling objective from section 4, and it is the same one-line gradient as logistic regression. Scale this loop to billions of pairs over gigabytes of text and you have reproduced word2vec. Everything else is engineering (subsampling frequent words, multithreading, a good learning-rate schedule)." },
+        { type: "heading", text: "The real thing: gensim word2vec" },
+        { type: "code", lang: "py", code: "from gensim.models import Word2Vec\n\nsentences = [[\"the\", \"king\", \"rules\", \"the\", \"kingdom\"],\n             [\"the\", \"queen\", \"rules\", \"the\", \"kingdom\"]]  # use a real corpus!\n\nmodel = Word2Vec(sentences, vector_size=100, window=5,\n                 sg=1, negative=5, min_count=1, epochs=50)\n#                 ^ sg=1 = skip-gram   ^ 5 negative samples\n\nmodel.wv.most_similar(\"king\", topn=5)          # nearest neighbors by cosine\nmodel.wv.similarity(\"king\", \"queen\")           # a single cosine score\nmodel.wv.most_similar(positive=[\"king\", \"woman\"], negative=[\"man\"])  # analogy!\n\n# Or load pretrained vectors trained on billions of words:\nimport gensim.downloader as api\nglove = api.load(\"glove-wiki-gigaword-100\")    # ~128 MB download\nprint(glove.most_similar(positive=[\"king\", \"woman\"], negative=[\"man\"])[0])\n# -> ('queen', 0.77)" },
+        { type: "heading", text: "Sentence embeddings & nearest-neighbor semantic search" },
+        { type: "p", text: "For anything modern, use `sentence-transformers`. Here is a complete semantic-search index in a dozen lines — the exact pattern that scales up to RAG:" },
+        { type: "code", lang: "py", code: "from sentence_transformers import SentenceTransformer, util\n\nmodel = SentenceTransformer(\"all-MiniLM-L6-v2\")   # small, fast, 384-dim\n\ncorpus = [\n    \"The cat sits on the warm windowsill.\",\n    \"Interest rates were raised by the central bank.\",\n    \"A kitten is napping in the sunshine.\",\n    \"The stock market fell sharply today.\",\n]\ndoc_emb = model.encode(corpus, convert_to_tensor=True, normalize_embeddings=True)\n\nquery = \"a sleepy young feline\"\nq_emb = model.encode(query, convert_to_tensor=True, normalize_embeddings=True)\n\nhits = util.semantic_search(q_emb, doc_emb, top_k=2)[0]   # cosine nearest neighbors\nfor h in hits:\n    print(round(h[\"score\"], 3), corpus[h[\"corpus_id\"]])\n# Top hits are the two CAT sentences, not the finance ones —\n# even though the query shares NO words with them. That is semantic search." },
+        { type: "callout", variant: "good", text: "Notice the query *\"a sleepy young feline\"* retrieves the cat sentences despite sharing **zero words** with them. TF-IDF (section 2) would score them zero — no word overlap. That gap, keyword-match vs meaning-match, is the entire reason embeddings exist, and it is why every serious search system in 2026 is built on vectors like these." },
+      ]
+    },
+
+    {
+      id: "projects",
+      title: "Projects & practice",
+      level: "core",
+      body: [
+        { type: "callout", variant: "note", text: "Reading about embeddings builds recognition; building them builds intuition. Do at least two of these — start with the TF-IDF baseline and the from-scratch skip-gram, since they cement the two big ideas (counts vs prediction)." },
+        { type: "list", ordered: true, items: [
+          "**TF-IDF search engine.** Index a folder of documents (or Wikipedia articles) with `TfidfVectorizer`, then build a query loop that returns the top-5 documents by cosine similarity. Add bigrams and compare. This is a real, useful tool in ~20 lines and it teaches the vector-space model in your fingers.",
+          "**Sentiment classifier baseline.** Grab the IMDb reviews dataset, train TF-IDF + logistic regression, and report accuracy. Then print the 20 most positive and negative words from the learned weights. Try to beat it with a bigger model later — you often can't by much, which is the lesson.",
+          "**Skip-gram from scratch.** Extend the NumPy trainer in section 8 to a real corpus (e.g. `text8`). Add frequent-word subsampling. Verify it learns `paris − france + japan ≈ tokyo`. Plot the top-500 words with t-SNE or UMAP and eyeball the clusters.",
+          "**LSA vs word2vec.** Build a PPMI matrix from a corpus, truncate with SVD to get LSA vectors, and compare their nearest-neighbor quality to gensim word2vec on the same corpus. See Levy & Goldberg's claim (they're two routes up one mountain) with your own eyes.",
+          "**Bias audit.** Load pretrained GloVe and measure the gender projection of occupation words (`nurse`, `engineer`, `programmer`, `teacher`) onto the `he − she` direction. Reproduce a slice of Bolukbasi et al. and reflect on what it means for deployed systems.",
+          "**Semantic search / mini-RAG.** Embed a document collection with `sentence-transformers`, store the vectors (start with a NumPy array, then try FAISS or Chroma), and build a natural-language search box. This is the literal foundation of the RAG project in the LLM track — you'll extend it there.",
+        ]},
+      ]
+    },
+
+    {
+      id: "references",
+      title: "Go deeper (references)",
+      level: "deep",
+      body: [
+        { type: "p", text: "The original papers here are unusually readable — the word2vec and GloVe papers are worth an evening each. Start with the Illustrated guide for intuition, then go to the sources." },
+        { type: "link", url: "https://jalammar.github.io/illustrated-word2vec/", text: "Jay Alammar — The Illustrated Word2vec (the best visual intuition; read this first)" },
+        { type: "link", url: "https://web.stanford.edu/~jurafsky/slp3/6.pdf", text: "Jurafsky & Martin — Speech and Language Processing, Ch. 6: Vector Semantics & Embeddings (the canonical textbook chapter, free PDF)" },
+        { type: "link", url: "https://arxiv.org/abs/1301.3781", text: "Mikolov et al. (2013) — Efficient Estimation of Word Representations (the original word2vec / skip-gram & CBOW paper)" },
+        { type: "link", url: "https://arxiv.org/abs/1310.4546", text: "Mikolov et al. (2013) — Distributed Representations of Words and Phrases (negative sampling & the king−man+woman result)" },
+        { type: "link", url: "https://nlp.stanford.edu/pubs/glove.pdf", text: "Pennington, Socher & Manning (2014) — GloVe: Global Vectors for Word Representation" },
+        { type: "link", url: "https://arxiv.org/abs/1908.10084", text: "Reimers & Gurevych (2019) — Sentence-BERT: sentence embeddings for semantic search (the SBERT paper)" },
+        { type: "link", url: "https://www.sbert.net/", text: "sentence-transformers documentation — practical embeddings, semantic search & retrieval you'll use for RAG" },
+      ]
+    },
+  ],
+
+  packages: [
+    { name: "scikit-learn", why: "`TfidfVectorizer`, `TruncatedSVD` (LSA), and linear baselines — your first stop for classic text" },
+    { name: "gensim", why: "mature word2vec/FastText training + `downloader` for pretrained GloVe vectors" },
+    { name: "sentence-transformers", why: "SBERT sentence/passage embeddings for semantic search & RAG — the modern default" },
+    { name: "numpy", why: "everything from scratch: co-occurrence, PPMI, SVD, and the skip-gram trainer" },
+    { name: "faiss", why: "fast approximate nearest-neighbor search over millions of embedding vectors" },
+    { name: "transformers", why: "contextual embeddings from BERT & friends (`AutoModel`) when you need per-token vectors" },
+  ],
+
+  gotchas: [
+    "One-hot vectors are all mutually orthogonal: cosine similarity of any two distinct words is $0$. The representation encodes **no** meaning — that is the whole problem embeddings solve.",
+    "Compare documents/embeddings with **cosine** similarity, not Euclidean distance — magnitude (document length) shouldn't count, only direction (topic/meaning).",
+    "TF-IDF and bag-of-words throw away word **order and negation**: `\"good, not bad\"` and `\"bad, not good\"` are identical vectors. Add n-grams to recover a little local order.",
+    "Static word2vec/GloVe give **one vector per word type**, so polysemy (`\"bank\"`) is averaged into mush. If word sense matters, you need contextual (BERT-style) embeddings.",
+    "The word2vec softmax over the whole vocabulary is intractable; the actual algorithm uses **negative sampling** — $k+1$ logistic regressions per pair, negatives drawn from $\\text{count}(w)^{0.75}$.",
+    "The `king − man + woman ≈ queen` demo **excludes the input words** from the answer set; without that exclusion the top hit is usually `\"king\"` again. Analogies are real but overhyped.",
+    "Embeddings inherit and amplify **bias** from training text (gender/occupation stereotypes). Audit before deploying anything that touches people.",
+    "Averaging word vectors gives a crude sentence vector; for real semantic search use a model trained for it (**SBERT**), which normalizes so a dot product *is* cosine similarity.",
+  ],
+
+  flashcards: [
+    { q: "Why is one-hot encoding a poor representation of word meaning?", a: "Every distinct word is orthogonal: $\\cos(\\text{cat},\\text{dog})=0=\\cos(\\text{cat},\\text{Tuesday})$. It's huge, sparse, and encodes no similarity — all words are equidistant." },
+    { q: "What does TF-IDF do and why?", a: "$\\text{tf}\\cdot\\text{idf}$: weights a term by how often it appears in a document times $\\log(N/\\text{df})$, its rarity across the corpus. It down-weights ubiquitous words (`the` → idf $0$) and highlights discriminative ones." },
+    { q: "State the distributional hypothesis.", a: "\"You shall know a word by the company it keeps\" (Firth, 1957): words appearing in similar contexts have similar meanings. It's the basis of every embedding method." },
+    { q: "What is PPMI and why clip negatives?", a: "Positive Pointwise Mutual Information: $\\max(\\log\\frac{P(i,j)}{P(i)P(j)},0)$. Measures co-occurrence beyond chance; negative PMI needs huge data to estimate reliably, so it's clipped to $0$." },
+    { q: "How does LSA produce word embeddings?", a: "Build a PPMI (or count/TF-IDF) matrix, take a truncated SVD $\\approx U_k\\Sigma_k V_k^\\top$, keep $U_k\\Sigma_k$ as dense $k$-dim word vectors. The first dense embeddings — 1990, pre-word2vec." },
+    { q: "What is the fake task word2vec skip-gram trains on, and what do we keep?", a: "Predict context words from a center word via $P(o\\mid c)\\propto\\exp(u_o^\\top v_c)$. We discard the classifier and keep the learned vectors — the weights *are* the embeddings." },
+    { q: "Why negative sampling instead of the softmax?", a: "The softmax denominator sums over the whole vocabulary ($V$) for every pair — intractable. Negative sampling replaces it with $k+1$ binary logistic tasks: real pair = yes, $k$ random pairs = no." },
+    { q: "word2vec vs GloVe in one line each?", a: "word2vec: predictive, streams local windows via SGD (implicitly factorizes shifted PPMI). GloVe: explicit weighted least-squares factorization of the global log co-occurrence matrix. Comparable quality." },
+    { q: "Why can't static embeddings handle `\"bank\"`?", a: "One vector per word type averages all senses (river vs finance) into one point, good for neither. Contextual embeddings (ELMo/BERT) give a different vector per word *in each sentence*." },
+    { q: "What are sentence embeddings good for, and which model?", a: "Encode a whole sentence into one vector so similar meanings are close under cosine — powering semantic search, clustering, and RAG. SBERT (Sentence-BERT) is the standard." },
+  ],
+
+  cheatsheet: [
+    { label: "TF-IDF matrix", code: "TfidfVectorizer().fit_transform(docs)" },
+    { label: "Cosine similarity", code: "a @ b / (norm(a)*norm(b))" },
+    { label: "Cosine matrix (sklearn)", code: "cosine_similarity(X, Y)" },
+    { label: "LSA (truncated SVD)", code: "TruncatedSVD(n_components=300).fit_transform(X)" },
+    { label: "Train word2vec", code: "Word2Vec(sents, sg=1, negative=5, vector_size=100)" },
+    { label: "Nearest words", code: "model.wv.most_similar('king')" },
+    { label: "Analogy", code: "wv.most_similar(positive=['king','woman'], negative=['man'])" },
+    { label: "Load pretrained GloVe", code: "gensim.downloader.load('glove-wiki-gigaword-100')" },
+    { label: "Sentence embeddings", code: "SentenceTransformer('all-MiniLM-L6-v2').encode(texts)" },
+    { label: "Semantic search", code: "util.semantic_search(q_emb, doc_emb, top_k=5)" },
+    { label: "Sigmoid", code: "1 / (1 + np.exp(-x))" },
+    { label: "Neg-sample dist.", code: "p = counts**0.75; p /= p.sum()" },
+  ],
+});
