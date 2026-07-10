@@ -1,0 +1,44 @@
+/* ============================================================
+   math.css — display-math blocks + KaTeX theming tweaks
+   ============================================================ */
+
+/* Display equation block (type: "math") */
+.mathblock {
+  margin: 1.15rem 0;
+  padding: 0.6rem 0.9rem;
+  overflow-x: auto;            /* wide equations scroll, never break page layout */
+  overflow-y: hidden;
+  text-align: center;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-soft, transparent));
+  border-radius: 6px;
+  scrollbar-width: thin;
+}
+
+.mathblock .katex-display {
+  margin: 0.35rem 0;
+}
+
+.mathblock .math-caption {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* Inline math should sit on the text baseline without inflating line-height */
+.katex {
+  font-size: 1.02em;
+  line-height: 1.2;
+}
+
+/* Let KaTeX inherit our theme colours (light + dark) */
+.katex { color: var(--text); }
+
+/* Long inline expressions inside prose get a subtle scroll rather than overflow */
+p .katex, li .katex, td .katex { white-space: nowrap; }
+
+/* Print: never clip equations */
+@media print {
+  .mathblock { overflow: visible; }
+}
