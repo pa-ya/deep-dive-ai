@@ -55,7 +55,7 @@ open index.html          # macOS
 ```
 index.html            # shell (loads KaTeX, engine, content)
 vendor/katex/         # vendored KaTeX (js, css, woff2 fonts) — offline math
-css/                  # theme, layout, components, animations, math
+css/                  # theme, layout, components, animations, math, identity (deck's own look)
 js/                   # highlight, render (+ math block), nav, search, flashcards, theme, ux, app
 content/              # one file per topic  (window.FRAMEWORKS.push({...}))
   _schema.md          # authoring guide: block types, math rules, escaping

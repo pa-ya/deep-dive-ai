@@ -1,0 +1,129 @@
+/* ============================================================
+   identity.css — visual identity exclusive to "Deep Dive AI"
+   Additive layer (loaded last). Restyles the shell without
+   changing structure: neural-ink palette signatures, an
+   ambient aurora, gradient branding, and per-track accents.
+   ============================================================ */
+
+/* ---------- Ambient background: soft aurora + neural dot-grid ---------- */
+/* Painted on <body> (backmost), so it shows through the reading column
+   while cards/sidebar/topbar paint over it. Fixed = parallax-free. */
+body {
+  background:
+    radial-gradient(900px 520px at 8% -8%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    radial-gradient(820px 560px at 104% 6%, color-mix(in srgb, var(--accent-2) 13%, transparent), transparent 62%),
+    radial-gradient(760px 620px at 50% 118%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    radial-gradient(circle at center, var(--border) 0.6px, transparent 0.6px) 0 0 / 26px 26px,
+    var(--bg);
+  background-attachment: fixed;
+}
+:root[data-theme="light"] body { background-blend-mode: normal; }
+
+/* ---------- Brand: gradient wordmark + glowing mark ---------- */
+.brand-text {
+  background: var(--grad);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 800;
+  letter-spacing: -.015em;
+  animation: gradShift 9s linear infinite;
+}
+.brand-mark {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+/* ---------- Hero: drifting aurora + gradient title ---------- */
+.hero {
+  border-color: color-mix(in srgb, var(--hero-color, var(--accent)) 22%, var(--border));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--hero-color, var(--accent)) 14%, transparent) inset;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  top: -45%; right: -8%;
+  width: 440px; height: 440px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--hero-color, var(--accent)) 42%, transparent), transparent 62%);
+  filter: blur(34px);
+  opacity: .45;
+  pointer-events: none;
+  z-index: 0;
+  animation: auroraDrift 16s var(--ease) infinite alternate;
+}
+.hero > * { position: relative; z-index: 1; }
+.hero h1 {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 800;
+}
+.hero-lang { background: var(--grad-soft); }
+
+/* ---------- Section numbers: gradient monospace + tick ---------- */
+.section-num {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Active nav: gradient wash + accent bar ---------- */
+.nav-item.is-active {
+  background: var(--grad-soft);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  position: relative;
+}
+.nav-item.is-active::before {
+  content: "";
+  position: absolute; left: -1px; top: 7px; bottom: 7px;
+  width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--grad);
+}
+.nav-group.is-open > .nav-group-head {
+  color: var(--text);
+}
+
+/* ---------- Reading progress: gradient + glow ---------- */
+.reading-progress span {
+  background: var(--grad);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* ---------- Primary buttons: gradient fill ---------- */
+.btn-primary {
+  background: var(--grad) !important;
+  border-color: transparent !important;
+  color: #0a0912 !important;
+  font-weight: 700;
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.btn-primary:hover { filter: brightness(1.06); }
+
+/* ---------- Display math: subtle identity rail ---------- */
+.mathblock {
+  border-left: 2px solid transparent;
+  border-image: var(--grad) 1;
+  padding-left: 14px;
+}
+
+/* ---------- Inline code + section links: warm to the palette ---------- */
+.section a.inline-link { border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* ---------- Cross-deck link: gradient hover ---------- */
+.deck-crosslink:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--grad-soft);
+}
+
+/* ---------- Motion keyframes ---------- */
+@keyframes gradShift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
+@keyframes auroraDrift {
+  0%   { transform: translate(0, 0) scale(1);      opacity: .38; }
+  50%  { transform: translate(-26px, 20px) scale(1.14); opacity: .52; }
+  100% { transform: translate(18px, -14px) scale(1.05); opacity: .4; }
+}
