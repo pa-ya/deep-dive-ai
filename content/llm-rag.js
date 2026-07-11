@@ -174,7 +174,7 @@
             ["**FAISS**", "Meta's ANN *library* (not a server)", "Max control, in-process, research & from-scratch"],
             ["**Chroma**", "Lightweight embedded/dev DB", "Prototyping, 'chat with your docs' on a laptop"],
             ["**Qdrant**", "Rust vector DB, great hybrid + filtering", "Self-hosted production, high throughput"],
-            ["**pgvector**", "Postgres extension (HNSW since 2024)", "You already run Postgres and have < ~1M vectors"],
+            ["**pgvector**", "Postgres extension (HNSW since v0.5.0, 2023)", "You already run Postgres and have < ~1M vectors"],
             ["**Pinecone / Weaviate**", "Managed serverless / built-in hybrid", "You want someone else to run the infra"],
           ]
         },

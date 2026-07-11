@@ -24,7 +24,7 @@
             ["exact, small problems", "approximate, huge/continuous problems", "scale at the cost of guarantees"],
           ]
         },
-        { type: "callout", variant: "note", text: "**This deck continues [RL Foundations](#/rl-foundations).** You should already know MDPs, returns $G_t = \\sum_k \\gamma^k r_{t+k}$, the Bellman equations, and tabular Q-learning / TD learning. Here we swap the table for a network and follow the thread all the way to how modern LLMs are aligned." },
+        { type: "callout", variant: "note", text: "**This deck continues [RL Foundations](#/rl-foundations).** You should already know MDPs, returns $G_t = \\sum_k \\gamma^k r_{t+k+1}$, the Bellman equations, and tabular Q-learning / TD learning. Here we swap the table for a network and follow the thread all the way to how modern LLMs are aligned." },
         { type: "heading", text: "The deadly triad — why deep RL is hard" },
         { type: "p", text: "Supervised learning is stable because its targets are *fixed* labels. RL is not: the target you regress toward is computed from your own current estimate (bootstrapping), and it moves as you learn. Sutton & Barto name three ingredients that, when combined, can make value-based learning **diverge** — the so-called **deadly triad**:" },
         { type: "list", ordered: true, items: [

@@ -70,7 +70,7 @@
         { type: "heading", text: "Full-parameter fine-tuning and why it hurts" },
         { type: "p", text: "The obvious way to do SFT is to update **all** the weights — full fine-tuning. It works and is the quality ceiling, but the memory bill is brutal. With the Adam optimizer you must hold, for every one of $N$ parameters: the weight, its gradient, and *two* optimizer moments — and for stable training, master copies in fp32." },
         { type: "math", tex: String.raw`\text{Mem} \approx \underbrace{2N}_{\text{fp16 weights}} + \underbrace{2N}_{\text{grads}} + \underbrace{12N}_{\text{Adam }m,v,\text{fp32 master}} \;\approx\; 16N \text{ bytes}` },
-        { type: "p", text: "For a 7-billion-parameter model that is roughly **112 GB** just for the optimizer state — before activations — which does not fit on a single 80 GB A100, let alone a consumer GPU. This memory wall is the entire reason parameter-efficient fine-tuning was invented, and it is where we go next." },
+        { type: "p", text: "For a 7-billion-parameter model that is roughly **112 GB** of static training memory (fp16 weights + gradients + optimizer state) — before activations — which does not fit on a single 80 GB A100, let alone a consumer GPU. This memory wall is the entire reason parameter-efficient fine-tuning was invented, and it is where we go next." },
         { type: "callout", variant: "note", text: "**When full FT is still right:** when you have the hardware and want maximum quality, when adapting a *small* model (≤1–2B), or when doing large-scale continued pretraining. For everything else on one or two GPUs, LoRA/QLoRA is the default in 2025–2026." },
       ]
     },
@@ -189,8 +189,8 @@
           headers: ["Method", "Key idea", "Use when"],
           rows: [
             ["**DPO**", "offline pairwise loss from chosen/rejected", "the reliable default with preference pairs"],
-            ["**ORPO**", "merges SFT + preference into one stage via an odds-ratio term; **no reference model**", "you want one-shot SFT+align, half the memory (used by Gemma 2)"],
-            ["**KTO**", "learns from *unpaired* thumbs-up/down binary feedback", "you have thumbs data, not matched pairs (used by Qwen 3)"],
+            ["**ORPO**", "merges SFT + preference into one stage via an odds-ratio term; **no reference model**", "you want one-shot SFT+align with no separate SFT stage and half the memory"],
+            ["**KTO**", "learns from *unpaired* thumbs-up/down binary feedback", "you have thumbs up/down data, not matched preference pairs"],
             ["**GRPO**", "online, critic-free PPO; advantage from *group* of samples' relative scores", "verifiable rewards / reasoning (used by DeepSeek for math & code)"],
             ["**SimPO**", "reference-free, length-normalized reward", "cutting the reference model, avoiding length bias"],
           ]

@@ -103,7 +103,7 @@
         { type: "link", url: "https://huggingface.co/learn", text: "HuggingFace Courses (LLM, NLP, RL, Deep RL) — free and hands-on" },
         { type: "link", url: "https://www.statlearning.com/", text: "James et al. — An Introduction to Statistical Learning (free; the classical-ML bible)" },
         { type: "link", url: "https://incompleteideas.net/book/the-book-2nd.html", text: "Sutton & Barto — Reinforcement Learning: An Introduction (free)" },
-        { type: "link", url: "https://huyenchip.com/2024/", text: "Chip Huyen — Designing Machine Learning Systems & AI Engineering (the production/MLOps references)" },
+        { type: "link", url: "https://huyenchip.com/books/", text: "Chip Huyen — Designing Machine Learning Systems & AI Engineering (the production/MLOps references)" },
       ]
     },
   ],
